@@ -16,6 +16,7 @@ import BotTraining from './pages/BotTraining';
 import SocialMedia from './pages/SocialMedia';
 import Reports from './pages/Reports';
 import Settings from './pages/Settings';
+import About from './pages/About';
 import Login from './pages/Login';
 
 // Create query client
@@ -110,6 +111,7 @@ function App() {
                     <Route path="/social-media" element={<SocialMedia />} />
                     <Route path="/reports" element={<Reports />} />
                     <Route path="/settings" element={<Settings />} />
+                    <Route path="/about" element={<About />} />
                   </Routes>
                 </MainLayout>
               </ProtectedRoute>

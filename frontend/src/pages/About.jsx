@@ -3,29 +3,38 @@ import { Users, Mail, Globe, Heart, Award, Zap, Shield, Target } from 'lucide-re
 import GlassCard from '../components/GlassCard';
 
 const About = () => {
-  const founders = [
+  const founder = {
+    name: 'Mahmoud Aboelros',
+    role: 'Founder & CEO',
+    image: '👑',
+    bio: 'Visionary entrepreneur on a mission to democratize AI-powered sales automation',
+    email: 'mahmoud@aisalescommander.com',
+    linkedin: '#'
+  };
+
+  const coFounders = [
     {
-      name: 'Ahmed Hassan',
-      role: 'CEO & Co-Founder',
+      name: 'Shady Ahmed',
+      role: 'Co-Founder',
       image: '👨‍💼',
-      bio: 'Visionary leader with 10+ years in AI and automation',
-      email: 'ahmed@aisalescommander.com',
+      bio: 'Strategic architect building dreams from raw chaos',
+      email: 'shady@aisalescommander.com',
       linkedin: '#'
     },
     {
-      name: 'Sarah Johnson',
-      role: 'CTO & Co-Founder',
-      image: '👩‍💻',
-      bio: 'Expert in machine learning and scalable architectures',
-      email: 'sarah@aisalescommander.com',
+      name: 'Idris Ghamed',
+      role: 'Co-Founder',
+      image: '👨‍💻',
+      bio: 'Technical innovator turning midnight ideas into reality',
+      email: 'idris@aisalescommander.com',
       linkedin: '#'
     },
     {
-      name: 'Michael Chen',
-      role: 'CPO & Co-Founder',
-      image: '👨‍🎨',
-      bio: 'Product strategist passionate about user experience',
-      email: 'michael@aisalescommander.com',
+      name: 'Ayman Ali',
+      role: 'Co-Founder',
+      image: '👨‍🔬',
+      bio: 'Product visionary crafting daylight empires',
+      email: 'ayman@aisalescommander.com',
       linkedin: '#'
     }
   ];
@@ -54,10 +63,10 @@ const About = () => {
   ];
 
   const stats = [
-    { number: '10K+', label: 'Active Users' },
-    { number: '99.9%', label: 'Uptime' },
-    { number: '50M+', label: 'Messages Processed' },
-    { number: '150+', label: 'Countries' }
+    { number: 'Oct 2025', label: 'Founded' },
+    { number: '100%', label: 'Vision Driven' },
+    { number: '24/7', label: 'AI Support' },
+    { number: '∞', label: 'Possibilities' }
   ];
 
   return (
@@ -77,7 +86,7 @@ const About = () => {
           About AI Sales Commander
         </motion.h1>
         <p className="text-xl text-gray-300 max-w-3xl mx-auto">
-          Revolutionizing sales automation with the power of artificial intelligence
+          A fresh startup launched in October 2025, revolutionizing sales automation with cutting-edge AI
         </p>
       </motion.div>
 
@@ -120,21 +129,25 @@ const About = () => {
           </div>
           <div className="space-y-4 text-gray-300 text-lg leading-relaxed">
             <p>
-              Founded in 2024, <span className="text-blue-400 font-semibold">AI Sales Commander</span> was born from a simple yet powerful vision: 
-              to empower businesses with intelligent automation that transforms how they connect with customers.
+              Launched in <span className="text-blue-400 font-semibold">October 2025</span>, <span className="text-purple-400 font-semibold">AI Sales Commander</span> represents 
+              a bold new chapter in sales automation. Born from late-night brainstorming sessions and fueled by an unwavering belief 
+              that AI can revolutionize how businesses connect with their customers.
             </p>
             <p>
-              We recognized that traditional sales processes were time-consuming, inefficient, and often missed opportunities. 
-              Our team of AI experts, engineers, and sales professionals came together to create a solution that leverages 
-              the latest advancements in artificial intelligence and machine learning.
+              We're a fresh startup with a powerful vision: to democratize AI-powered sales automation. While we're just beginning our journey, 
+              our platform already integrates cutting-edge AI technology with seamless multi-channel communication. From e-commerce platforms 
+              to social media, we're building the future of intelligent sales automation.
             </p>
             <p>
-              Today, we serve thousands of businesses worldwide, helping them automate customer communication, 
-              manage orders seamlessly, and grow their sales exponentially. Our platform integrates with major e-commerce 
-              platforms and social media channels, providing a unified hub for all your sales operations.
+              Our team brings together passionate innovators, skilled engineers, and sales automation experts who believe that 
+              every business—regardless of size—deserves access to enterprise-level AI tools. We're not just building software; 
+              we're crafting a movement.
             </p>
-            <p className="text-purple-400 font-semibold">
-              Our mission is simple: Make AI-powered sales automation accessible to businesses of all sizes.
+            <p className="text-purple-400 font-semibold italic">
+              "We're not here to follow the market—we're here to redefine it."
+            </p>
+            <p className="text-blue-400 font-semibold">
+              Join us on this journey. We're just getting started.
             </p>
           </div>
         </GlassCard>
@@ -170,7 +183,7 @@ const About = () => {
         </GlassCard>
       </motion.div>
 
-      {/* Co-Founders Section */}
+      {/* Founder Section */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -178,11 +191,71 @@ const About = () => {
       >
         <GlassCard className="p-8">
           <div className="flex items-center gap-3 mb-6">
+            <Users className="w-8 h-8 text-yellow-400" />
+            <h2 className="text-3xl font-bold text-white">Meet Our Founder</h2>
+          </div>
+          <div className="flex justify-center">
+            <motion.div
+              className="relative group w-full max-w-md"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.5 }}
+            >
+              <div className="p-8 rounded-xl bg-gradient-to-br from-yellow-500/10 via-orange-500/10 to-red-500/10 backdrop-blur-sm border-2 border-yellow-500/30 hover:border-yellow-500/50 transition-all duration-300">
+                <div className="text-center space-y-4">
+                  {/* Avatar */}
+                  <motion.div
+                    className="text-9xl mx-auto w-40 h-40 flex items-center justify-center rounded-full bg-gradient-to-br from-yellow-500/20 to-orange-500/20 border-4 border-yellow-500/40"
+                    whileHover={{ rotate: 360, scale: 1.1 }}
+                    transition={{ duration: 0.6 }}
+                  >
+                    {founder.image}
+                  </motion.div>
+                  
+                  {/* Info */}
+                  <div>
+                    <h3 className="text-3xl font-bold text-white">{founder.name}</h3>
+                    <p className="text-yellow-400 font-semibold text-lg">{founder.role}</p>
+                    <p className="text-gray-400 mt-3 text-base">{founder.bio}</p>
+                  </div>
+                  
+                  {/* Contact */}
+                  <div className="flex items-center justify-center gap-4 pt-4 border-t border-white/10">
+                    <a
+                      href={`mailto:${founder.email}`}
+                      className="p-3 rounded-lg bg-yellow-500/20 hover:bg-yellow-500/30 transition-colors"
+                      title="Email"
+                    >
+                      <Mail className="w-6 h-6 text-yellow-400" />
+                    </a>
+                    <a
+                      href={founder.linkedin}
+                      className="p-3 rounded-lg bg-orange-500/20 hover:bg-orange-500/30 transition-colors"
+                      title="LinkedIn"
+                    >
+                      <Globe className="w-6 h-6 text-orange-400" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </GlassCard>
+      </motion.div>
+
+      {/* Co-Founders Section */}
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.5 }}
+      >
+        <GlassCard className="p-8">
+          <div className="flex items-center gap-3 mb-6">
             <Users className="w-8 h-8 text-pink-400" />
             <h2 className="text-3xl font-bold text-white">Meet Our Co-Founders</h2>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {founders.map((founder, index) => (
+            {coFounders.map((cofounder, index) => (
               <motion.div
                 key={index}
                 className="relative group"
@@ -198,27 +271,27 @@ const About = () => {
                       whileHover={{ rotate: 360 }}
                       transition={{ duration: 0.6 }}
                     >
-                      {founder.image}
+                      {cofounder.image}
                     </motion.div>
                     
                     {/* Info */}
                     <div>
-                      <h3 className="text-2xl font-bold text-white">{founder.name}</h3>
-                      <p className="text-purple-400 font-semibold">{founder.role}</p>
-                      <p className="text-gray-400 mt-2 text-sm">{founder.bio}</p>
+                      <h3 className="text-2xl font-bold text-white">{cofounder.name}</h3>
+                      <p className="text-purple-400 font-semibold">{cofounder.role}</p>
+                      <p className="text-gray-400 mt-2 text-sm">{cofounder.bio}</p>
                     </div>
                     
                     {/* Contact */}
                     <div className="flex items-center justify-center gap-4 pt-4 border-t border-white/10">
                       <a
-                        href={`mailto:${founder.email}`}
+                        href={`mailto:${cofounder.email}`}
                         className="p-2 rounded-lg bg-blue-500/20 hover:bg-blue-500/30 transition-colors"
                         title="Email"
                       >
                         <Mail className="w-5 h-5 text-blue-400" />
                       </a>
                       <a
-                        href={founder.linkedin}
+                        href={cofounder.linkedin}
                         className="p-2 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 transition-colors"
                         title="LinkedIn"
                       >
@@ -278,20 +351,52 @@ const About = () => {
       >
         <GlassCard className="p-8 bg-gradient-to-br from-purple-500/10 via-pink-500/10 to-blue-500/10 border-purple-500/30">
           <div className="text-center space-y-4">
-            <Heart className="w-16 h-16 text-pink-400 mx-auto" />
-            <h2 className="text-3xl font-bold text-white">Our Dedication</h2>
-            <div className="max-w-3xl mx-auto space-y-4 text-gray-300 text-lg">
-              <p className="italic">
-                "We dedicate this platform to every entrepreneur, small business owner, and sales professional 
-                who dreams of scaling their business without sacrificing personal connections with their customers."
+            <Heart className="w-16 h-16 text-pink-400 mx-auto animate-pulse" />
+            <h2 className="text-4xl font-bold text-white mb-6">Dedication</h2>
+            <div className="max-w-4xl mx-auto space-y-6 text-gray-300 text-lg leading-relaxed">
+              <p className="text-xl font-semibold text-purple-300">
+                To the people who carved their names into the foundation of my journey.
               </p>
-              <p>
-                Our team works tirelessly to ensure that <span className="text-purple-400 font-semibold">AI Sales Commander</span> remains 
-                at the forefront of innovation, continuously evolving to meet your needs. We're committed to your success, 
-                and we measure our achievements by the growth and satisfaction of our users.
-              </p>
-              <p className="text-pink-400 font-bold text-xl mt-6">
-                Thank you for trusting us with your business. Together, we're building the future of sales automation.
+              
+              <div className="space-y-4 italic">
+                <p>
+                  To <span className="text-blue-400 font-bold">IDRIS GHAMED</span>, <span className="text-purple-400 font-bold">AYMAN ALI</span>, and <span className="text-pink-400 font-bold">SHADY</span> —<br />
+                  <span className="text-gray-400">the hands that helped build dreams out of raw chaos.</span><br />
+                  <span className="text-gray-300">Together, we turned midnight ideas into daylight empires.</span>
+                </p>
+
+                <p className="pt-4">
+                  To <span className="text-green-400 font-bold">AHMED HUSSIEN</span> —<br />
+                  <span className="text-gray-400">the one who stood even when the world faded,</span><br />
+                  <span className="text-gray-300">the voice that reminded me who I am when I almost forgot.</span>
+                </p>
+
+                <p className="pt-4 border-t border-white/10 pt-6">
+                  And to my eternal sun <span className="text-yellow-400 font-bold">MK</span> —
+                </p>
+                
+                <div className="space-y-2 pl-4 border-l-4 border-pink-500/30">
+                  <p className="text-gray-400">
+                    The legacy wasn't born from warmth,<br />
+                    but from bones cracked under silence.
+                  </p>
+                  <p className="text-gray-300">
+                    To the one who broke me —<br />
+                    no sorrow has ever cut deeper,<br />
+                    and no light has ever burned brighter.
+                  </p>
+                  <p className="text-pink-300 font-semibold">
+                    You left… but your light never did.
+                  </p>
+                  <p className="text-pink-400 font-bold text-xl">
+                    You are the wound and the fire.<br />
+                    The pain and the spark.
+                  </p>
+                </div>
+              </div>
+
+              <p className="text-center text-gray-500 italic text-sm mt-8 pt-6 border-t border-white/10">
+                "From the ashes of what was, we built what will be."
               </p>
             </div>
           </div>
@@ -305,8 +410,8 @@ const About = () => {
         transition={{ delay: 0.7 }}
         className="text-center text-gray-500 pb-8"
       >
-        <p>© 2024 AI Sales Commander. All rights reserved.</p>
-        <p className="text-sm mt-2">Made with ❤️ by a team passionate about your success</p>
+        <p>© 2025 AI Sales Commander. All rights reserved.</p>
+        <p className="text-sm mt-2">Founded October 2025 • Made with ❤️ and raw ambition</p>
       </motion.div>
     </div>
   );

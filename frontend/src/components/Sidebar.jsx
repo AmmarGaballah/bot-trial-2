@@ -11,7 +11,8 @@ import {
   Sparkles,
   Package,
   GraduationCap,
-  Hash
+  Hash,
+  Info
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -29,6 +30,7 @@ const navigation = [
   { name: 'Social Media', to: '/social-media', icon: Hash },
   { name: 'Reports', to: '/reports', icon: BarChart3 },
   { name: 'Settings', to: '/settings', icon: Settings },
+  { name: 'About', to: '/about', icon: Info },
 ];
 
 export default function Sidebar() {

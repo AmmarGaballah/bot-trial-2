@@ -21,6 +21,9 @@ import { useProjectStore } from '../store/projectStore';
 export default function Dashboard() {
   const { currentProject } = useProjectStore();
 
+  // DEMO MODE: Use fake data for advertising/showcase
+  const USE_DEMO_DATA = true;
+
   // Fetch real data
   const { data: ordersData } = useQuery({
     queryKey: ['dashboard-orders', currentProject?.id],
@@ -67,17 +70,51 @@ export default function Dashboard() {
     enabled: !!currentProject,
   });
 
-  // Calculate stats from real data
-  const orders = ordersData?.orders || [];
-  const messages = messagesData?.messages || [];
-  const products = productsData?.products || [];
+  // Calculate stats from real or demo data
+  let orders, messages, products, totalRevenue, totalOrders, totalMessages, unreadMessages, totalProducts, activeIntegrations;
   
-  const totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order.total) || 0), 0);
-  const totalOrders = orders.length;
-  const totalMessages = messages.length;
-  const unreadMessages = messages.filter(m => !m.is_read).length;
-  const totalProducts = products.length;
-  const activeIntegrations = integrationsData?.integrations?.filter(i => i.is_active).length || 0;
+  if (USE_DEMO_DATA) {
+    // DEMO DATA for showcase
+    totalRevenue = 147832.50;
+    totalOrders = 1247;
+    totalMessages = 3892;
+    unreadMessages = 47;
+    totalProducts = 156;
+    activeIntegrations = 8;
+    
+    // Mock data arrays
+    orders = Array.from({ length: 1247 }, (_, i) => ({
+      id: i,
+      external_id: `ORD-${10000 + i}`,
+      total: Math.random() * 500 + 50,
+      created_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
+    }));
+    
+    messages = Array.from({ length: 3892 }, (_, i) => ({
+      id: i,
+      is_read: i > 47,
+      platform: ['whatsapp', 'instagram', 'telegram', 'facebook'][Math.floor(Math.random() * 4)],
+      direction: Math.random() > 0.5 ? 'inbound' : 'outbound',
+      created_at: new Date(Date.now() - Math.random() * 7 * 24 * 60 * 60 * 1000).toISOString(),
+    }));
+    
+    products = Array.from({ length: 156 }, (_, i) => ({
+      id: i,
+      in_stock: i < 142,
+    }));
+  } else {
+    // Real data
+    orders = ordersData?.orders || [];
+    messages = messagesData?.messages || [];
+    products = productsData?.products || [];
+    
+    totalRevenue = orders.reduce((sum, order) => sum + (parseFloat(order.total) || 0), 0);
+    totalOrders = orders.length;
+    totalMessages = messages.length;
+    unreadMessages = messages.filter(m => !m.is_read).length;
+    totalProducts = products.length;
+    activeIntegrations = integrationsData?.integrations?.filter(i => i.is_active).length || 0;
+  }
 
   // Group orders by day for chart
   const last7Days = [...Array(7)].map((_, i) => {
@@ -86,7 +123,15 @@ export default function Dashboard() {
     return date.toISOString().split('T')[0];
   });
 
-  const salesData = last7Days.map(date => {
+  const salesData = USE_DEMO_DATA ? [
+    { date: 'Mon', revenue: 18420, orders: 163 },
+    { date: 'Tue', revenue: 22350, orders: 198 },
+    { date: 'Wed', revenue: 19780, orders: 174 },
+    { date: 'Thu', revenue: 24560, orders: 215 },
+    { date: 'Fri', revenue: 28940, orders: 248 },
+    { date: 'Sat', revenue: 21820, orders: 192 },
+    { date: 'Sun', revenue: 25130, orders: 221 },
+  ] : last7Days.map(date => {
     const dayOrders = orders.filter(o => o.created_at?.startsWith(date));
     const dayRevenue = dayOrders.reduce((sum, o) => sum + (parseFloat(o.total) || 0), 0);
     return {
@@ -97,7 +142,15 @@ export default function Dashboard() {
   });
 
   // Group messages by day
-  const messageData = last7Days.map(date => {
+  const messageData = USE_DEMO_DATA ? [
+    { date: 'Mon', messages: 487, unread: 12 },
+    { date: 'Tue', messages: 563, unread: 8 },
+    { date: 'Wed', messages: 521, unread: 15 },
+    { date: 'Thu', messages: 612, unread: 9 },
+    { date: 'Fri', messages: 689, unread: 11 },
+    { date: 'Sat', messages: 548, unread: 6 },
+    { date: 'Sun', messages: 602, unread: 7 },
+  ] : last7Days.map(date => {
     const dayMessages = messages.filter(m => m.created_at?.startsWith(date));
     return {
       date: new Date(date).toLocaleDateString('en-US', { weekday: 'short' }),
@@ -109,51 +162,55 @@ export default function Dashboard() {
   const stats = [
     {
       label: 'Total Revenue',
-      value: `$${totalRevenue.toFixed(2)}`,
-      change: totalRevenue > 0 ? '+100%' : '0%',
+      value: USE_DEMO_DATA ? '$147,832' : `$${totalRevenue.toFixed(2)}`,
+      change: '+245%',
       icon: DollarSign,
       color: 'from-green-500 to-emerald-600',
       trend: 'up',
     },
     {
       label: 'Total Orders',
-      value: totalOrders.toString(),
-      change: totalOrders > 0 ? '+100%' : '0%',
+      value: USE_DEMO_DATA ? '1,247' : totalOrders.toString(),
+      change: '+189%',
       icon: ShoppingCart,
       color: 'from-blue-500 to-cyan-600',
       trend: 'up',
     },
     {
       label: 'Messages',
-      value: totalMessages.toString(),
-      subValue: `${unreadMessages} unread`,
+      value: USE_DEMO_DATA ? '3,892' : totalMessages.toString(),
+      subValue: USE_DEMO_DATA ? '47 unread' : `${unreadMessages} unread`,
       icon: MessageSquare,
       color: 'from-purple-500 to-pink-600',
       trend: 'up',
+      change: '+312%',
     },
     {
       label: 'Products',
-      value: totalProducts.toString(),
-      subValue: `${products.filter(p => p.in_stock).length} in stock`,
+      value: USE_DEMO_DATA ? '156' : totalProducts.toString(),
+      subValue: USE_DEMO_DATA ? '142 in stock' : `${products.filter(p => p.in_stock).length} in stock`,
       icon: Package,
       color: 'from-orange-500 to-red-600',
-      trend: 'neutral',
+      trend: 'up',
+      change: '+78%',
     },
     {
       label: 'Social Comments',
-      value: (socialStatsData?.total_comments || 0).toString(),
-      subValue: `${socialStatsData?.pending_responses || 0} pending`,
+      value: USE_DEMO_DATA ? '2,487' : (socialStatsData?.total_comments || 0).toString(),
+      subValue: USE_DEMO_DATA ? '34 pending' : `${socialStatsData?.pending_responses || 0} pending`,
       icon: Hash,
       color: 'from-pink-500 to-rose-600',
       trend: 'up',
+      change: '+423%',
     },
     {
-      label: 'Integrations',
-      value: activeIntegrations.toString(),
-      subValue: `${activeIntegrations} active`,
+      label: 'Active Integrations',
+      value: USE_DEMO_DATA ? '8' : activeIntegrations.toString(),
+      subValue: USE_DEMO_DATA ? 'All systems operational' : `${activeIntegrations} active`,
       icon: Zap,
       color: 'from-cyan-500 to-blue-600',
-      trend: 'neutral',
+      trend: 'up',
+      change: '+300%',
     },
   ];
 
@@ -278,7 +335,16 @@ export default function Dashboard() {
         <GlassCard className="p-6">
           <h3 className="text-xl font-semibold mb-4">Integration Status</h3>
           <div className="space-y-3">
-            {integrationsData?.integrations?.slice(0, 5).map((integration, index) => (
+            {(USE_DEMO_DATA ? [
+              { id: 1, provider: 'shopify', is_active: true },
+              { id: 2, provider: 'whatsapp', is_active: true },
+              { id: 3, provider: 'instagram', is_active: true },
+              { id: 4, provider: 'telegram', is_active: true },
+              { id: 5, provider: 'facebook', is_active: true },
+              { id: 6, provider: 'twitter', is_active: true },
+              { id: 7, provider: 'woocommerce', is_active: false },
+              { id: 8, provider: 'stripe', is_active: true },
+            ] : integrationsData?.integrations?.slice(0, 5) || []).map((integration, index) => (
               <motion.div
                 key={integration.id}
                 initial={{ opacity: 0, x: -20 }}
@@ -374,7 +440,11 @@ export default function Dashboard() {
           </h3>
           <div className="space-y-4">
             {/* Recent Orders */}
-            {orders.slice(0, 3).map((order, index) => (
+            {(USE_DEMO_DATA ? [
+              { id: 1, external_id: 'ORD-11247', total: '245.99', created_at: new Date(Date.now() - 15 * 60 * 1000).toISOString() },
+              { id: 2, external_id: 'ORD-11246', total: '189.50', created_at: new Date(Date.now() - 42 * 60 * 1000).toISOString() },
+              { id: 3, external_id: 'ORD-11245', total: '412.75', created_at: new Date(Date.now() - 78 * 60 * 1000).toISOString() },
+            ] : orders.slice(0, 3)).map((order, index) => (
               <motion.div
                 key={`order-${order.id}`}
                 initial={{ opacity: 0, y: 10 }}
@@ -395,7 +465,11 @@ export default function Dashboard() {
             ))}
             
             {/* Recent Messages */}
-            {messages.slice(0, 2).map((message, index) => (
+            {(USE_DEMO_DATA ? [
+              { id: 1, direction: 'inbound', platform: 'WhatsApp', created_at: new Date(Date.now() - 5 * 60 * 1000).toISOString() },
+              { id: 2, direction: 'outbound', platform: 'Instagram', created_at: new Date(Date.now() - 12 * 60 * 1000).toISOString() },
+              { id: 3, direction: 'inbound', platform: 'Telegram', created_at: new Date(Date.now() - 23 * 60 * 1000).toISOString() },
+            ] : messages.slice(0, 2)).map((message, index) => (
               <motion.div
                 key={`message-${message.id}`}
                 initial={{ opacity: 0, y: 10 }}
@@ -415,7 +489,7 @@ export default function Dashboard() {
               </motion.div>
             ))}
 
-            {orders.length === 0 && messages.length === 0 && (
+            {!USE_DEMO_DATA && orders.length === 0 && messages.length === 0 && (
               <div className="text-center py-8 text-gray-500">
                 <p className="text-sm">No recent activity</p>
                 <p className="text-xs mt-2">Activity will appear here as it happens</p>
