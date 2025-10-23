@@ -22,7 +22,7 @@ export default function Dashboard() {
   const { currentProject } = useProjectStore();
 
   // DEMO MODE: Use fake data for advertising/showcase
-  const USE_DEMO_DATA = true;
+  const USE_DEMO_DATA = false;
 
   // Fetch real data
   const { data: ordersData } = useQuery({
