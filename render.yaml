@@ -2,12 +2,28 @@ services:
   # Backend API
   - type: web
     name: ai-sales-bot-api
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 73e84a478041eb77d1550e716b436727334eb82c
     runtime: docker
     region: oregon
     plan: starter
     branch: main
     dockerfilePath: ./backend/Dockerfile
     dockerContext: ./backend
+<<<<<<< HEAD
+=======
+=======
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+>>>>>>> 109a10dfcb7b0da68f8a67938d2a8dcb3a7b4bb7
+>>>>>>> 73e84a478041eb77d1550e716b436727334eb82c
     envVars:
       - key: PYTHON_VERSION
         value: 3.11
@@ -19,10 +35,19 @@ services:
         generateValue: true
       - key: ENVIRONMENT
         value: production
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 73e84a478041eb77d1550e716b436727334eb82c
       - key: TESTING_MODE
         value: false
       - key: DEBUG
         value: false
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> 109a10dfcb7b0da68f8a67938d2a8dcb3a7b4bb7
+>>>>>>> 73e84a478041eb77d1550e716b436727334eb82c
       - key: CORS_ORIGINS
         value: https://ai-sales-bot.onrender.com
       - key: GEMINI_API_KEY
@@ -32,10 +57,19 @@ services:
           type: redis
           name: ai-sales-bot-redis
           property: connectionString
+<<<<<<< HEAD
+=======
+<<<<<<< HEAD
+>>>>>>> 73e84a478041eb77d1550e716b436727334eb82c
       - key: ENABLE_SUBSCRIPTION_LIMITS
         value: true
       - key: ENABLE_OVERAGE_BILLING
         value: true
+<<<<<<< HEAD
+=======
+=======
+>>>>>>> 109a10dfcb7b0da68f8a67938d2a8dcb3a7b4bb7
+>>>>>>> 73e84a478041eb77d1550e716b436727334eb82c
     healthCheckPath: /health
 
   # Frontend
