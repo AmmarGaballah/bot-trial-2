@@ -65,3 +65,4 @@ htmlcov/
 *.egg-info/
 build/
 dist/
+BOT_FEATURES_FOR_USERS.md
