@@ -1,0 +1,65 @@
+services:
+  # Backend API
+  - type: web
+    name: ai-sales-bot-api
+    runtime: python
+    region: oregon
+    plan: starter
+    branch: main
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11
+      - key: DATABASE_URL
+        fromDatabase:
+          name: ai-sales-bot-db
+          property: connectionString
+      - key: SECRET_KEY
+        generateValue: true
+      - key: ENVIRONMENT
+        value: production
+      - key: CORS_ORIGINS
+        value: https://ai-sales-bot.onrender.com
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: REDIS_URL
+        fromService:
+          type: redis
+          name: ai-sales-bot-redis
+          property: connectionString
+    healthCheckPath: /health
+
+  # Frontend
+  - type: web
+    name: ai-sales-bot
+    runtime: node
+    region: oregon
+    plan: starter
+    branch: main
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: NODE_VERSION
+        value: 18
+      - key: VITE_API_URL
+        value: https://ai-sales-bot-api.onrender.com
+      - key: VITE_TESTING_MODE
+        value: false
+
+# Database
+databases:
+  - name: ai-sales-bot-db
+    plan: starter
+    databaseName: ai_sales_bot
+    user: ai_sales_bot_user
+    region: oregon
+
+# Redis Cache
+  - type: redis
+    name: ai-sales-bot-redis
+    plan: starter
+    region: oregon
+    maxmemoryPolicy: allkeys-lru

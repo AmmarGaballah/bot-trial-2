@@ -12,7 +12,9 @@ import {
   Package,
   GraduationCap,
   Hash,
-  Info
+  Info,
+  Activity,
+  CreditCard
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { cn } from '../lib/utils';
@@ -29,6 +31,8 @@ const navigation = [
   { name: 'Bot Training', to: '/bot-training', icon: GraduationCap },
   { name: 'Social Media', to: '/social-media', icon: Hash },
   { name: 'Reports', to: '/reports', icon: BarChart3 },
+  { name: 'Usage', to: '/usage', icon: Activity },
+  { name: 'Subscription', to: '/subscription', icon: CreditCard },
   { name: 'Settings', to: '/settings', icon: Settings },
   { name: 'About', to: '/about', icon: Info },
 ];
