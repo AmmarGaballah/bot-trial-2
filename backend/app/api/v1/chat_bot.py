@@ -81,8 +81,8 @@ async def process_message(
     # Verify project access
     await verify_project_access(project_id, user_id, db)
     
-    # Get AI chat bot
-    chat_bot = get_chat_bot(db, project_id)
+    # Get AI chat bot with usage tracking
+    chat_bot = get_chat_bot(db, project_id, UUID(user_id))
     
     # Process message
     try:
@@ -132,8 +132,8 @@ async def handle_order_inquiry(
     # Verify project access
     await verify_project_access(project_id, user_id, db)
     
-    # Get AI chat bot
-    chat_bot = get_chat_bot(db, project_id)
+    # Get AI chat bot with usage tracking
+    chat_bot = get_chat_bot(db, project_id, UUID(user_id))
     
     try:
         result = await chat_bot.handle_order_inquiry(
@@ -176,8 +176,8 @@ async def whatsapp_webhook(
     if not messages:
         return {"status": "no_messages"}
     
-    # Process each message
-    chat_bot = get_chat_bot(db, project_id)
+    # Process each message (no user_id for webhooks)
+    chat_bot = get_chat_bot(db, project_id, None)
     responses = []
     
     for msg in messages:
@@ -213,7 +213,8 @@ async def telegram_webhook(
     if not customer_id or not message_text:
         return {"status": "no_message"}
     
-    chat_bot = get_chat_bot(db, project_id)
+    # No user_id for webhooks
+    chat_bot = get_chat_bot(db, project_id, None)
     
     result = await chat_bot.process_incoming_message(
         customer_message=message_text,
@@ -247,7 +248,8 @@ async def discord_webhook(
         message_text = body.get("data", {}).get("options", [{}])[0].get("value", "")
         
         if customer_id and message_text:
-            chat_bot = get_chat_bot(db, project_id)
+            # No user_id for webhooks
+            chat_bot = get_chat_bot(db, project_id, None)
             
             result = await chat_bot.process_incoming_message(
                 customer_message=message_text,
@@ -284,7 +286,8 @@ async def tiktok_webhook(
         message_text = body.get("message", {}).get("text")
         
         if customer_id and message_text:
-            chat_bot = get_chat_bot(db, project_id)
+            # No user_id for webhooks
+            chat_bot = get_chat_bot(db, project_id, None)
             
             result = await chat_bot.process_incoming_message(
                 customer_message=message_text,

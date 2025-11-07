@@ -11,7 +11,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.models import Message, Order, Project, MessageDirection, OrderStatus
-from app.services.gemini_client import gemini_client
+from app.services.service_factory import get_gemini_with_tracking
 
 logger = structlog.get_logger(__name__)
 
@@ -26,9 +26,11 @@ class AIChatBot:
     - Provides personalized support
     """
     
-    def __init__(self, db: AsyncSession, project_id: UUID):
+    def __init__(self, db: AsyncSession, project_id: UUID, user_id: Optional[UUID] = None):
         self.db = db
         self.project_id = project_id
+        self.user_id = user_id
+        self.gemini_client = get_gemini_with_tracking(db)
     
     async def process_incoming_message(
         self,
@@ -184,10 +186,11 @@ Identify:
 
 Respond in JSON format."""
         
-        response = await gemini_client.generate_response(
+        response = await self.gemini_client.generate_response(
             prompt=prompt,
             use_functions=False,
-            temperature=0.2
+            temperature=0.2,
+            user_id=self.user_id
         )
         
         try:
@@ -324,11 +327,12 @@ Customer message: "{message}"
 
 Provide a helpful, personalized response."""
         
-        return await gemini_client.generate_response(
+        return await self.gemini_client.generate_response(
             prompt=full_prompt,
             context=enhanced_context,
             use_functions=True,
-            temperature=0.7
+            temperature=0.7,
+            user_id=self.user_id
         )
     
     async def _execute_actions(self, function_calls: List[Dict[str, Any]]) -> List[str]:
@@ -517,7 +521,7 @@ Total: {order.currency} {order.total}
         }
 
 
-# Singleton factory
-def get_chat_bot(db: AsyncSession, project_id: UUID) -> AIChatBot:
-    """Get AI Chat Bot instance."""
-    return AIChatBot(db, project_id)
+# Factory function
+def get_chat_bot(db: AsyncSession, project_id: UUID, user_id: Optional[UUID] = None) -> AIChatBot:
+    """Get AI Chat Bot instance with usage tracking."""
+    return AIChatBot(db, project_id, user_id)
