@@ -14,7 +14,7 @@ from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.db.models import Project, Order, Message, MessageDirection, APILog, Product, BotInstruction
 from app.models.schemas import AssistantQuery, AssistantResponse, FunctionCall
-from app.services.gemini_client import gemini_client
+from app.services.service_factory import get_gemini_with_tracking
 from app.services.bot_function_executor import BotFunctionExecutor
 
 router = APIRouter()
@@ -145,17 +145,22 @@ async def query_assistant(
             ]
     
     try:
+        # Get Gemini client with usage tracking enabled
+        gemini_client = get_gemini_with_tracking(db)
+        
         # Generate response from Gemini
         logger.info(
             "Querying Gemini assistant",
             project_id=str(query.project_id),
-            message_length=len(query.message)
+            message_length=len(query.message),
+            user_id=user_id
         )
         
         response = await gemini_client.generate_response(
             prompt=query.message,
             context=context,
-            use_functions=query.use_function_calling
+            use_functions=query.use_function_calling,
+            user_id=UUID(user_id)  # Pass user_id for tracking
         )
         
         # Log API usage

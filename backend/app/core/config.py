@@ -48,6 +48,15 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 0
     DB_ECHO: bool = False
     
+    @validator("DATABASE_URL", pre=True)
+    def convert_database_url(cls, v):
+        """Convert Render's postgres:// to postgresql+asyncpg:// for SQLAlchemy."""
+        if v and v.startswith("postgres://"):
+            return v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v and not v.startswith("postgresql"):
+            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        return v
+    
     @validator("AUTH_DATABASE_URL", pre=True, always=True)
     def set_auth_database_url(cls, v, values):
         """Set AUTH_DATABASE_URL from DATABASE_URL if not provided."""
