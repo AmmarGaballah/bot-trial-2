@@ -64,6 +64,26 @@ class OrderStatus(str, enum.Enum):
     REFUNDED = "refunded"
 
 
+class SubscriptionTier(str, enum.Enum):
+    """Subscription tier levels."""
+    FREE = "free"
+    STARTER = "starter"
+    GROWTH = "growth"
+    PROFESSIONAL = "professional"
+    SCALE = "scale"
+    BUSINESS = "business"
+    ENTERPRISE = "enterprise"
+
+
+class SubscriptionStatus(str, enum.Enum):
+    """Subscription status."""
+    ACTIVE = "active"
+    CANCELLED = "cancelled"
+    EXPIRED = "expired"
+    TRIAL = "trial"
+    PAST_DUE = "past_due"
+
+
 class User(AuthBase):
     """User account model."""
     __tablename__ = "users"
@@ -75,12 +95,22 @@ class User(AuthBase):
     role = Column(SQLEnum(UserRole), default=UserRole.USER, nullable=False)
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime(timezone=True))
+    
+    # Subscription Information
+    subscription_tier = Column(SQLEnum(SubscriptionTier), default=SubscriptionTier.FREE, nullable=False)
+    subscription_status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False)
+    subscription_started_at = Column(DateTime(timezone=True))
+    subscription_expires_at = Column(DateTime(timezone=True))
+    stripe_customer_id = Column(String(255), unique=True, index=True)
+    stripe_subscription_id = Column(String(255), unique=True, index=True)
+    
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     projects = relationship("Project", back_populates="owner", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    subscription = relationship("Subscription", back_populates="user", uselist=False, cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<User {self.email}>"
@@ -533,3 +563,347 @@ class AutoResponseTemplate(Base):
     
     def __repr__(self):
         return f"<AutoResponseTemplate {self.name}>"
+
+
+class ConversationHistory(Base):
+    """Track conversation history per customer for memory and context."""
+    __tablename__ = "conversation_history"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    
+    # Customer identification
+    customer_id = Column(String(255), nullable=False)  # Platform-specific customer ID
+    customer_name = Column(String(255))
+    platform = Column(String(50), nullable=False)  # whatsapp, instagram, facebook, etc.
+    
+    # Conversation details
+    conversation_id = Column(String(255))  # Thread or conversation ID
+    message_content = Column(Text, nullable=False)
+    message_direction = Column(SQLEnum(MessageDirection), nullable=False)  # inbound/outbound
+    
+    # AI context
+    intent = Column(String(100))  # What customer wants (product_inquiry, order_status, etc.)
+    sentiment = Column(String(50))  # positive, negative, neutral
+    entities_extracted = Column(JSONB, default={})  # Product names, order IDs, etc.
+    
+    # Summary for quick retrieval
+    summary = Column(Text)  # AI-generated summary of the message
+    
+    # Metadata
+    embedding_vector = Column(JSONB, default=[])  # For semantic search (optional)
+    extra_data = Column(JSONB, default={})
+    
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    
+    # Relationships
+    project = relationship("Project", backref="conversation_histories")
+    
+    # Indexes
+    __table_args__ = (
+        Index("idx_conversation_customer", "customer_id", "platform"),
+        Index("idx_conversation_project_customer", "project_id", "customer_id"),
+        Index("idx_conversation_created", "created_at"),
+    )
+    
+    def __repr__(self):
+        return f"<ConversationHistory {self.customer_id} - {self.platform}>"
+
+
+class BusinessContext(Base):
+    """Store business-specific context, learning, and perception."""
+    __tablename__ = "business_context"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    
+    # Context type
+    context_type = Column(String(100), nullable=False)  # brand_voice, common_questions, policies, etc.
+    context_key = Column(String(255), nullable=False)  # Specific identifier
+    
+    # Context content
+    title = Column(String(255), nullable=False)
+    content = Column(Text, nullable=False)  # The actual context/knowledge
+    
+    # Metadata
+    tags = Column(JSONB, default=[])  # For categorization
+    relevance_score = Column(Float, default=1.0)  # How relevant is this (learned over time)
+    times_used = Column(Integer, default=0)  # How often this context is accessed
+    
+    # Learning
+    learned_from = Column(String(100))  # manual, ai_analysis, customer_feedback, etc.
+    confidence_score = Column(Float, default=0.5)  # AI confidence in this context
+    
+    # Platform-specific
+    active_for_platforms = Column(JSONB, default=[])  # [] means all platforms
+    
+    # Examples
+    examples = Column(JSONB, default=[])  # Example uses of this context
+    
+    is_active = Column(Boolean, default=True)
+    last_used = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", backref="business_contexts")
+    
+    # Indexes
+    __table_args__ = (
+        Index("idx_business_context_project", "project_id"),
+        Index("idx_business_context_type", "context_type"),
+        Index("idx_business_context_key", "context_key"),
+        Index("idx_business_context_used", "times_used"),
+    )
+    
+    def __repr__(self):
+        return f"<BusinessContext {self.context_type} - {self.title}>"
+
+
+class SocialMediaPost(Base):
+    """Track social media posts for monitoring and engagement."""
+    __tablename__ = "social_media_posts"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    
+    # Platform info
+    platform = Column(String(50), nullable=False)  # instagram, facebook, tiktok, twitter
+    external_id = Column(String(255), nullable=False, unique=True)  # Platform post ID
+    post_url = Column(String(500))
+    
+    # Post content
+    content = Column(Text)  # Caption/text content
+    media_type = Column(String(50))  # image, video, carousel, story
+    media_urls = Column(JSONB, default=[])  # Array of media URLs
+    
+    # Author info (usually the business itself)
+    author_username = Column(String(255))
+    author_id = Column(String(255))
+    
+    # Engagement metrics
+    likes_count = Column(Integer, default=0)
+    comments_count = Column(Integer, default=0)
+    shares_count = Column(Integer, default=0)
+    views_count = Column(Integer, default=0)
+    
+    # AI analysis
+    ai_analyzed = Column(Boolean, default=False)
+    sentiment = Column(String(50))  # overall sentiment of comments
+    topics = Column(JSONB, default=[])  # Main topics discussed
+    keywords = Column(JSONB, default=[])  # Extracted keywords
+    ai_summary = Column(Text)  # AI-generated summary of post and comments
+    
+    # Comment monitoring
+    last_comment_check = Column(DateTime(timezone=True))
+    unresponded_comments = Column(Integer, default=0)
+    
+    # Performance tracking
+    engagement_rate = Column(Float)  # Calculated engagement percentage
+    best_performing = Column(Boolean, default=False)  # Flag for high-performing posts
+    
+    # Metadata
+    hashtags = Column(JSONB, default=[])
+    mentions = Column(JSONB, default=[])
+    location = Column(String(255))
+    
+    extra_data = Column(JSONB, default={})
+    posted_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", backref="social_posts")
+    
+    # Indexes
+    __table_args__ = (
+        Index("idx_social_post_project", "project_id"),
+        Index("idx_social_post_platform_external", "platform", "external_id"),
+        Index("idx_social_post_engagement", "engagement_rate"),
+        Index("idx_social_post_posted_at", "posted_at"),
+    )
+    
+    def __repr__(self):
+        return f"<SocialMediaPost {self.platform} - {self.external_id}>"
+
+
+class CustomerProfile(Base):
+    """Comprehensive customer profile with preferences and history."""
+    __tablename__ = "customer_profiles"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    
+    # Customer identification (unified across platforms)
+    customer_id = Column(String(255), nullable=False)  # Unique ID (phone, email, or platform ID)
+    
+    # Platform accounts
+    platform_accounts = Column(JSONB, default={})  # {whatsapp: "+1234", instagram: "@user", etc.}
+    
+    # Personal info
+    name = Column(String(255))
+    email = Column(String(255))
+    phone = Column(String(50))
+    
+    # Preferences learned from interactions
+    preferred_language = Column(String(10), default="en")
+    preferred_platform = Column(String(50))
+    communication_style = Column(String(50))  # formal, casual, emoji-friendly
+    
+    # Behavioral data
+    interaction_count = Column(Integer, default=0)  # Total interactions
+    last_interaction = Column(DateTime(timezone=True))
+    first_interaction = Column(DateTime(timezone=True))
+    
+    # Purchase history summary
+    total_orders = Column(Integer, default=0)
+    total_spent = Column(Float, default=0.0)
+    average_order_value = Column(Float)
+    favorite_products = Column(JSONB, default=[])  # Product IDs or names
+    
+    # Sentiment and satisfaction
+    overall_sentiment = Column(String(50))  # positive, neutral, negative
+    satisfaction_score = Column(Float)  # 0-100 based on interactions
+    
+    # Customer type
+    customer_type = Column(String(50))  # new, regular, vip, problematic
+    tags = Column(JSONB, default=[])  # Custom tags
+    
+    # AI insights
+    interests = Column(JSONB, default=[])  # Inferred interests
+    purchase_patterns = Column(JSONB, default={})  # When they buy, what they buy together
+    lifetime_value_estimate = Column(Float)  # Predicted LTV
+    
+    # Notes and context
+    notes = Column(Text)  # Manual or AI-generated notes
+    special_instructions = Column(Text)  # E.g., "allergic to peanuts", "prefers eco-friendly"
+    
+    # Flags
+    is_vip = Column(Boolean, default=False)
+    is_blocked = Column(Boolean, default=False)
+    requires_special_attention = Column(Boolean, default=False)
+    
+    extra_data = Column(JSONB, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", backref="customer_profiles")
+    
+    # Indexes
+    __table_args__ = (
+        Index("idx_customer_profile_project", "project_id"),
+        Index("idx_customer_profile_customer_id", "customer_id"),
+        Index("idx_customer_profile_email", "email"),
+        Index("idx_customer_profile_phone", "phone"),
+        Index("idx_customer_profile_type", "customer_type"),
+    )
+
+
+class Subscription(AuthBase):
+    """User subscription and billing details."""
+    __tablename__ = "subscriptions"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False, unique=True)
+    
+    # Subscription details
+    tier = Column(SQLEnum(SubscriptionTier), default=SubscriptionTier.FREE, nullable=False)
+    status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False)
+    
+    # Pricing
+    price_monthly = Column(Float, default=0.0)  # Monthly price
+    price_annually = Column(Float, default=0.0)  # Annual price
+    billing_cycle = Column(String(50), default="monthly")  # monthly, annually
+    currency = Column(String(10), default="USD")
+    
+    # Billing dates
+    started_at = Column(DateTime(timezone=True))
+    expires_at = Column(DateTime(timezone=True))
+    trial_ends_at = Column(DateTime(timezone=True))
+    cancelled_at = Column(DateTime(timezone=True))
+    next_billing_date = Column(DateTime(timezone=True))
+    
+    # Payment provider info
+    stripe_customer_id = Column(String(255))
+    stripe_subscription_id = Column(String(255))
+    stripe_payment_method_id = Column(String(255))
+    
+    # Usage limits (per month)
+    limit_messages = Column(Integer, default=100)
+    limit_orders = Column(Integer, default=10)
+    limit_ai_requests = Column(Integer, default=1000)
+    limit_projects = Column(Integer, default=1)
+    limit_integrations = Column(Integer, default=2)
+    limit_storage_gb = Column(Float, default=1.0)
+    limit_team_members = Column(Integer, default=1)
+    
+    # Features enabled
+    features = Column(JSONB, default={})  # {"ai_automation": true, "advanced_reports": false}
+    
+    # Billing history
+    total_paid = Column(Float, default=0.0)
+    invoices = Column(JSONB, default=[])  # Array of invoice objects
+    
+    extra_data = Column(JSONB, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    user = relationship("User", back_populates="subscription")
+    usage_records = relationship("UsageTracking", back_populates="subscription", cascade="all, delete-orphan")
+    
+    # Indexes
+    __table_args__ = (
+        Index("idx_subscription_user", "user_id"),
+        Index("idx_subscription_tier", "tier"),
+        Index("idx_subscription_status", "status"),
+        Index("idx_subscription_expires", "expires_at"),
+    )
+
+
+class UsageTracking(Base):
+    """Track usage metrics per subscription for billing and limits."""
+    __tablename__ = "usage_tracking"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    subscription_id = Column(UUID(as_uuid=True), ForeignKey("subscriptions.id", ondelete="CASCADE"), nullable=False)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    
+    # Tracking period
+    period_start = Column(DateTime(timezone=True), nullable=False)
+    period_end = Column(DateTime(timezone=True), nullable=False)
+    
+    # Usage counts
+    messages_sent = Column(Integer, default=0)
+    messages_received = Column(Integer, default=0)
+    orders_created = Column(Integer, default=0)
+    ai_requests = Column(Integer, default=0)
+    ai_tokens_used = Column(Integer, default=0)
+    storage_used_gb = Column(Float, default=0.0)
+    
+    # Cost tracking
+    ai_cost = Column(Float, default=0.0)  # Cost of AI usage
+    storage_cost = Column(Float, default=0.0)
+    total_cost = Column(Float, default=0.0)
+    
+    # Limit violations
+    limits_exceeded = Column(JSONB, default=[])  # ["messages", "ai_requests"]
+    overage_charges = Column(Float, default=0.0)
+    
+    extra_data = Column(JSONB, default={})
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    # Relationships
+    subscription = relationship("Subscription", back_populates="usage_records")
+    
+    # Indexes
+    __table_args__ = (
+        Index("idx_usage_subscription", "subscription_id"),
+        Index("idx_usage_user", "user_id"),
+        Index("idx_usage_period", "period_start", "period_end"),
+    )
+    
+    def __repr__(self):
+        return f"<UsageTracking {self.user_id} {self.period_start}>"
