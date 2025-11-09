@@ -71,11 +71,19 @@ async def run_async_migrations() -> None:
     
     # SSL configuration for Railway PostgreSQL
     connect_args = {}
-    if settings.ENVIRONMENT in ["production", "staging"] or "railway" in settings.DATABASE_URL.lower():
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        connect_args["ssl"] = ssl_context
+    
+    # Only enable SSL for external Railway connections
+    # Internal Railway network (postgres.railway.internal) doesn't need SSL
+    if settings.ENVIRONMENT in ["production", "staging"]:
+        if "railway" in settings.DATABASE_URL.lower() and "railway.internal" not in settings.DATABASE_URL.lower():
+            # External Railway connection - use SSL
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            connect_args["ssl"] = ssl_context
+        elif "railway.internal" in settings.DATABASE_URL.lower():
+            # Internal Railway connection - disable SSL (already secure private network)
+            connect_args["ssl"] = False
     
     connectable = async_engine_from_config(
         configuration,

@@ -25,14 +25,19 @@ def get_connect_args():
     """Get connection arguments with SSL support for Railway PostgreSQL."""
     connect_args = {}
     
-    # Railway PostgreSQL requires SSL
-    if settings.ENVIRONMENT in ["production", "staging"] or "railway" in settings.AUTH_DATABASE_URL.lower():
-        # Create SSL context that allows self-signed certificates
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
+    # Railway internal network doesn't need SSL (already secure)
+    # Only external Railway connections need SSL
+    if settings.ENVIRONMENT in ["production", "staging"]:
+        if "railway" in settings.AUTH_DATABASE_URL.lower() and "railway.internal" not in settings.AUTH_DATABASE_URL.lower():
+            # External Railway connection - use SSL
+            ssl_context = ssl.create_default_context()
+            ssl_context.check_hostname = False
+            ssl_context.verify_mode = ssl.CERT_NONE
+            connect_args["ssl"] = ssl_context
+        elif "railway.internal" in settings.AUTH_DATABASE_URL.lower():
+            # Internal Railway connection - disable SSL (already secure private network)
+            connect_args["ssl"] = False
         
-        connect_args["ssl"] = ssl_context
         connect_args["server_settings"] = {
             "application_name": "aisales_backend",
         }
