@@ -1,7 +1,7 @@
 """Add product catalog, bot training, and social media tables
 
 Revision ID: add_new_features
-Revises: 
+Revises: 6cecfbddb1a5
 Create Date: 2025-10-15
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_new_features'
-down_revision = None
+down_revision = '6cecfbddb1a5'  # Links to initial migration
 branch_labels = None
 depends_on = None
 
