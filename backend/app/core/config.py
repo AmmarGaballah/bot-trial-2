@@ -50,11 +50,20 @@ class Settings(BaseSettings):
     
     @validator("DATABASE_URL", pre=True)
     def convert_database_url(cls, v):
-        """Convert Render's postgres:// to postgresql+asyncpg:// for SQLAlchemy."""
-        if v and v.startswith("postgres://"):
-            return v.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif v and not v.startswith("postgresql"):
-            return v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        """Convert postgres:// to postgresql+asyncpg:// for SQLAlchemy async support."""
+        if not v:
+            return v
+        
+        # Handle Railway/Render postgres:// URLs
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        # Handle standard postgresql:// URLs
+        elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Handle malformed URLs with double protocol
+        elif "postgresql+asyncpg:postgresql://" in v:
+            v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
+        
         return v
     
     @validator("AUTH_DATABASE_URL", pre=True, always=True)
