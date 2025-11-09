@@ -33,11 +33,11 @@ async def test_login(credentials: UserLogin) -> Any:
     TEST ONLY: Login without database connection.
     Use for local testing when Supabase connection fails.
     
-    Email: test@example.com
+    Accepts: test@example.com OR test@aisales.local
     Password: any password works
     """
-    # Accept any credentials for testing
-    if credentials.email == "test@example.com":
+    # Accept multiple test emails
+    if credentials.email in ["test@example.com", "test@aisales.local"]:
         # Create fake user data for token
         token_data = {
             "sub": "00000000-0000-0000-0000-000000000001",  # Fake UUID
@@ -59,7 +59,7 @@ async def test_login(credentials: UserLogin) -> Any:
     else:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Test login: use test@example.com"
+            detail="Test login: use test@example.com or test@aisales.local"
         )
 
 

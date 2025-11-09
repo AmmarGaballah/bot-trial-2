@@ -11,10 +11,13 @@ import Integrations from './pages/Integrations';
 import IntegrationsManagement from './pages/IntegrationsManagement';
 import Messages from './pages/Messages';
 import Orders from './pages/Orders';
+import OrderTracking from './pages/OrderTracking';
 import Products from './pages/Products';
 import BotTraining from './pages/BotTraining';
 import SocialMedia from './pages/SocialMedia';
 import Reports from './pages/Reports';
+import Subscription from './pages/Subscription';
+import UsageDashboard from './pages/UsageDashboard';
 import Settings from './pages/Settings';
 import About from './pages/About';
 import Login from './pages/Login';
@@ -104,12 +107,15 @@ function App() {
                     <Route path="/integrations" element={<Integrations />} />
                     <Route path="/integrations/manage" element={<IntegrationsManagement />} />
                     <Route path="/orders" element={<Orders />} />
+                    <Route path="/order-tracking" element={<OrderTracking />} />
                     <Route path="/messages" element={<Messages />} />
                     <Route path="/inbox" element={<Messages />} />
                     <Route path="/products" element={<Products />} />
                     <Route path="/bot-training" element={<BotTraining />} />
                     <Route path="/social-media" element={<SocialMedia />} />
                     <Route path="/reports" element={<Reports />} />
+                    <Route path="/subscription" element={<Subscription />} />
+                    <Route path="/usage" element={<UsageDashboard />} />
                     <Route path="/settings" element={<Settings />} />
                     <Route path="/about" element={<About />} />
                   </Routes>

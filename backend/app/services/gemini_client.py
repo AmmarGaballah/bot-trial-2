@@ -5,6 +5,7 @@ Supports multiple API keys with automatic rotation for rate limit management.
 """
 
 from typing import List, Dict, Any, Optional
+from uuid import UUID
 import json
 import structlog
 import google.generativeai as genai
@@ -34,6 +35,67 @@ class GeminiClient:
         
         # Define available functions for function calling
         self.available_functions = self._define_functions()
+        
+        # Subscription and optimizer integration (set externally)
+        self.subscription_service = None
+        self.ai_optimizer = None
+    
+    def set_subscription_service(self, service):
+        """Set subscription service for usage tracking."""
+        self.subscription_service = service
+    
+    def set_ai_optimizer(self, optimizer):
+        """Set AI optimizer for caching and optimization."""
+        self.ai_optimizer = optimizer
+    
+    def _estimate_tokens(self, text: str) -> int:
+        """Rough estimate of tokens (1 token ≈ 4 characters)."""
+        return len(text) // 4
+    
+    async def _check_usage_limit(self, user_id: Optional[UUID]) -> bool:
+        """Check if user can make AI request."""
+        if not user_id or not self.subscription_service:
+            return True  # No enforcement if not configured
+        
+        try:
+            result = await self.subscription_service.check_and_enforce_limit(
+                user_id, "ai_requests"
+            )
+            return result.get("allowed", True)
+        except Exception as e:
+            logger.warning(f"Error checking usage limit: {e}")
+            return True  # Allow on error to avoid blocking
+    
+    async def _track_usage(
+        self,
+        user_id: Optional[UUID],
+        prompt: str,
+        response: str,
+        model: str = "gemini-2.0-flash"
+    ):
+        """Track AI usage for billing."""
+        if not user_id or not self.subscription_service:
+            return
+        
+        try:
+            tokens_input = self._estimate_tokens(prompt)
+            tokens_output = self._estimate_tokens(response)
+            
+            await self.subscription_service.track_ai_usage(
+                user_id=user_id,
+                tokens_input=tokens_input,
+                tokens_output=tokens_output,
+                model_used=model
+            )
+            
+            logger.debug(
+                "AI usage tracked",
+                user_id=str(user_id),
+                tokens_in=tokens_input,
+                tokens_out=tokens_output
+            )
+        except Exception as e:
+            logger.error(f"Error tracking AI usage: {e}")
     
     def _load_api_keys(self) -> List[str]:
         """Load all available API keys from settings (up to 100 keys)."""
@@ -448,7 +510,8 @@ class GeminiClient:
         context: Optional[Dict[str, Any]] = None,
         use_functions: bool = True,
         temperature: Optional[float] = None,
-        max_tokens: Optional[int] = None
+        max_tokens: Optional[int] = None,
+        user_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """
         Generate a response from Gemini with optional function calling.
@@ -459,10 +522,21 @@ class GeminiClient:
             use_functions: Whether to enable function calling
             temperature: Sampling temperature (0.0 - 1.0)
             max_tokens: Maximum tokens to generate
+            user_id: User ID for usage tracking (optional)
             
         Returns:
             Dictionary containing response text, function calls, and metadata
         """
+        # Check usage limit before generating
+        if user_id:
+            can_use = await self._check_usage_limit(user_id)
+            if not can_use:
+                return {
+                    "text": "You've reached your AI request limit for this month. Please upgrade your plan to continue using AI features.",
+                    "error": "limit_exceeded",
+                    "upgrade_required": True
+                }
+        
         try:
             # Build the full prompt with context
             full_prompt = self._build_prompt(prompt, context)
@@ -508,6 +582,15 @@ class GeminiClient:
                     
                     # Parse response
                     result = self._parse_response(response)
+                    
+                    # Track usage for billing
+                    if user_id:
+                        await self._track_usage(
+                            user_id=user_id,
+                            prompt=full_prompt,
+                            response=result.get("text", ""),
+                            model=model_name
+                        )
                     
                     logger.info(
                         "Gemini response generated successfully",
@@ -757,6 +840,32 @@ class GeminiClient:
             result["cost"] = (result["tokens_used"] / 1000) * 0.00025
         
         return result
+    
+    async def generate_content(
+        self,
+        prompt: str,
+        temperature: Optional[float] = None,
+        max_tokens: Optional[int] = None
+    ) -> str:
+        """
+        Simplified method to generate text content from Gemini.
+        
+        Args:
+            prompt: The input prompt
+            temperature: Sampling temperature (0.0 - 1.0)
+            max_tokens: Maximum tokens to generate
+            
+        Returns:
+            Generated text response as string
+        """
+        result = await self.generate_response(
+            prompt=prompt,
+            context=None,
+            use_functions=False,
+            temperature=temperature,
+            max_tokens=max_tokens
+        )
+        return result.get("text", "")
     
     async def generate_sales_reply(
         self,

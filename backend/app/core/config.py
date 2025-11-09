@@ -48,19 +48,61 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 0
     DB_ECHO: bool = False
     
+    @validator("DATABASE_URL", pre=True)
+    def convert_database_url(cls, v):
+        """Convert postgres:// to postgresql+asyncpg:// for SQLAlchemy async support."""
+        if not v:
+            return v
+        
+        # Handle Railway/Render postgres:// URLs
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        # Handle standard postgresql:// URLs
+        elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        # Handle malformed URLs with double protocol
+        elif "postgresql+asyncpg:postgresql://" in v:
+            v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
+        
+        return v
+    
     @validator("AUTH_DATABASE_URL", pre=True, always=True)
     def set_auth_database_url(cls, v, values):
-        """Set AUTH_DATABASE_URL from DATABASE_URL if not provided."""
+        """Set AUTH_DATABASE_URL from DATABASE_URL if not provided, with asyncpg driver."""
         if v is None and "DATABASE_URL" in values:
-            return values.get("DATABASE_URL")
-        return v or "postgresql+asyncpg://aisales:changeme@postgres:5432/aisales_auth"
+            v = values.get("DATABASE_URL")
+        
+        if not v:
+            return "postgresql+asyncpg://aisales:changeme@postgres:5432/aisales_auth"
+        
+        # Apply same conversion as DATABASE_URL
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif "postgresql+asyncpg:postgresql://" in v:
+            v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
+        
+        return v
     
     @validator("APP_DATABASE_URL", pre=True, always=True)
     def set_app_database_url(cls, v, values):
-        """Set APP_DATABASE_URL from DATABASE_URL if not provided."""
+        """Set APP_DATABASE_URL from DATABASE_URL if not provided, with asyncpg driver."""
         if v is None and "DATABASE_URL" in values:
-            return values.get("DATABASE_URL")
-        return v or "postgresql+asyncpg://aisales:changeme@postgres:5432/aisales_app"
+            v = values.get("DATABASE_URL")
+        
+        if not v:
+            return "postgresql+asyncpg://aisales:changeme@postgres:5432/aisales_app"
+        
+        # Apply same conversion as DATABASE_URL
+        if v.startswith("postgres://"):
+            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
+        elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
+            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
+        elif "postgresql+asyncpg:postgresql://" in v:
+            v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
+        
+        return v
     
     # Redis
     REDIS_URL: str = "redis://localhost:6379/0"

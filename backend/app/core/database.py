@@ -6,6 +6,7 @@ Supports dual-database architecture:
 """
 
 from typing import AsyncGenerator
+import ssl
 from sqlalchemy.ext.asyncio import (
     create_async_engine,
     AsyncSession,
@@ -19,6 +20,25 @@ from .config import settings
 # AUTH DATABASE - For user authentication
 # ============================================================================
 
+# SSL configuration for Railway PostgreSQL
+def get_connect_args():
+    """Get connection arguments with SSL support for Railway PostgreSQL."""
+    connect_args = {}
+    
+    # Railway PostgreSQL requires SSL
+    if settings.ENVIRONMENT in ["production", "staging"] or "railway" in settings.AUTH_DATABASE_URL.lower():
+        # Create SSL context that allows self-signed certificates
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        connect_args["ssl"] = ssl_context
+        connect_args["server_settings"] = {
+            "application_name": "aisales_backend",
+        }
+    
+    return connect_args
+
 # Create async engine for auth database
 auth_engine = create_async_engine(
     settings.AUTH_DATABASE_URL,
@@ -27,6 +47,7 @@ auth_engine = create_async_engine(
     max_overflow=settings.DB_MAX_OVERFLOW,
     pool_pre_ping=True,
     poolclass=NullPool if settings.ENVIRONMENT == "serverless" else None,
+    connect_args=get_connect_args(),
 )
 
 # Create async session factory for auth database
@@ -53,6 +74,7 @@ app_engine = create_async_engine(
     max_overflow=settings.DB_MAX_OVERFLOW,
     pool_pre_ping=True,
     poolclass=NullPool if settings.ENVIRONMENT == "serverless" else None,
+    connect_args=get_connect_args(),
 )
 
 # Create async session factory for application database

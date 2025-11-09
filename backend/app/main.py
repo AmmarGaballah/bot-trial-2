@@ -27,7 +27,10 @@ from app.api.v1 import (
     chat_bot,
     products,
     bot_training,
-    social_media
+    social_media,
+    enhanced_bot,
+    order_management,
+    subscriptions
 )
 
 # Configure structured logging
@@ -284,6 +287,24 @@ app.include_router(
     social_media.router,
     prefix=f"/api/{settings.API_VERSION}/social-media",
     tags=["Social Media"]
+)
+
+app.include_router(
+    enhanced_bot.router,
+    prefix=f"/api/{settings.API_VERSION}/enhanced-bot",
+    tags=["Enhanced AI Bot"]
+)
+
+app.include_router(
+    order_management.router,
+    prefix=f"/api/{settings.API_VERSION}/order-management",
+    tags=["Order Management & Automation"]
+)
+
+app.include_router(
+    subscriptions.router,
+    prefix=f"/api/{settings.API_VERSION}/subscriptions",
+    tags=["Subscriptions & Billing"]
 )
 
 
