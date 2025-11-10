@@ -224,12 +224,41 @@ async def debug_config():
     }
 
 
+@app.get("/migrate", tags=["Debug"])
+async def run_migrations():
+    """
+    Manually trigger database migrations.
+    Use this if migrations didn't run automatically.
+    """
+    import subprocess
+    try:
+        result = subprocess.run(
+            ["alembic", "upgrade", "head"],
+            capture_output=True,
+            text=True,
+            cwd="backend"
+        )
+        return {
+            "success": result.returncode == 0,
+            "stdout": result.stdout,
+            "stderr": result.stderr,
+            "message": "Migrations completed" if result.returncode == 0 else "Migrations failed"
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/seed", tags=["Debug"])
 async def seed_test_account():
     """
     Seed database with test account.
     Creates: test@aisales.local / AiSales2024!Demo
     Can be called by simply visiting the URL in browser.
+    
+    IMPORTANT: Run /migrate endpoint first if you get schema errors!
     """
     try:
         async with AsyncSessionLocal() as session:
@@ -246,7 +275,7 @@ async def seed_test_account():
         return {
             "success": False,
             "error": str(e),
-            "message": "Account may already exist or database error occurred"
+            "message": "Database schema error - run /migrate endpoint first, then try /seed again"
         }
 
 
