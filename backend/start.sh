@@ -26,4 +26,4 @@ alembic upgrade head || echo "⚠️  Migration warning (continuing...)"
 
 # Start uvicorn with proper port
 echo "🌐 Starting server on port $PORT..."
-exec uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2
+exec uvicorn app.main:app --host 0.0.0.0 --port $PORT
