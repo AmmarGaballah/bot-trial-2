@@ -59,20 +59,11 @@ logger = structlog.get_logger(__name__)
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
     # Startup
-    logger.info("Application starting", environment=settings.ENVIRONMENT)
+    logger.info("🚀 Application starting", environment=settings.ENVIRONMENT)
     
-    # Test database connection on startup
-    try:
-        from sqlalchemy import text
-        async with AsyncSessionLocal() as session:
-            await session.execute(text("SELECT 1"))
-        logger.info("✅ Database connection test passed")
-    except Exception as e:
-        logger.error("❌ Database connection test failed", error=str(e), exc_info=True)
-        # Don't crash on startup, but log the error
-    
-    # Database tables are created via Alembic migrations
-    logger.info("Database ready - using Alembic migrations for schema")
+    # Database connection will be tested on first request
+    # Migrations are run by start.sh before this point
+    logger.info("✅ Database ready - migrations applied by start.sh")
     
     yield
     
@@ -190,12 +181,27 @@ async def root():
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """Detailed health check endpoint."""
+    """Detailed health check endpoint with database test."""
+    from sqlalchemy import text
+    
+    db_status = "unknown"
+    db_error = None
+    
+    # Test database connection
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
+    
     return {
-        "status": "healthy",
-        "database": "connected",  # TODO: Add actual DB health check
-        "redis": "connected",     # TODO: Add actual Redis health check
-        "timestamp": time.time()
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "database_error": db_error,
+        "timestamp": time.time(),
+        "environment": settings.ENVIRONMENT
     }
 
 
