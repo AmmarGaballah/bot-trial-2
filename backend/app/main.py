@@ -116,7 +116,12 @@ app.add_middleware(
 if settings.is_production:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=["*.aisalescommander.com", "aisalescommander.com"]
+        allowed_hosts=[
+            "*.aisalescommander.com",
+            "aisalescommander.com",
+            "*.railway.app",  # Railway deployments
+            "*.up.railway.app"  # Railway public URLs
+        ]
     )
 
 
@@ -124,29 +129,43 @@ if settings.is_production:
 async def add_process_time_header(request: Request, call_next):
     """Add request processing time header and logging."""
     start_time = time.time()
-    
-    # Generate request ID
     request_id = str(time.time_ns())
     
-    # Process request
-    response = await call_next(request)
+    try:
+        # Process request
+        response = await call_next(request)
+        
+        # Calculate processing time
+        process_time = time.time() - start_time
+        response.headers["X-Process-Time"] = str(process_time)
+        response.headers["X-Request-ID"] = request_id
+        
+        # Log request
+        logger.info(
+            "Request processed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            process_time=f"{process_time:.3f}s",
+            request_id=request_id
+        )
+        
+        return response
     
-    # Calculate processing time
-    process_time = time.time() - start_time
-    response.headers["X-Process-Time"] = str(process_time)
-    response.headers["X-Request-ID"] = request_id
-    
-    # Log request
-    logger.info(
-        "Request processed",
-        method=request.method,
-        path=request.url.path,
-        status_code=response.status_code,
-        process_time=f"{process_time:.3f}s",
-        request_id=request_id
-    )
-    
-    return response
+    except Exception as e:
+        logger.error(
+            "Request processing failed",
+            error=str(e),
+            path=request.url.path,
+            method=request.method,
+            request_id=request_id,
+            exc_info=True
+        )
+        # Return error response instead of crashing
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal server error: {str(e)}"}
+        )
 
 
 # ============================================================================
