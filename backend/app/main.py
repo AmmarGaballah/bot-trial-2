@@ -16,22 +16,24 @@ from app.core.config import settings
 from app.core.database import init_db, close_db, AsyncSessionLocal
 from app.core.seed import seed_database
 from app.core.error_handlers import setup_error_handlers
-from app.api.v1 import (
-    auth,
-    projects,
-    integrations,
-    orders,
-    messages,
-    assistant,
-    reports,
-    chat_bot,
-    products,
-    bot_training,
-    social_media,
-    enhanced_bot,
-    order_management,
-    subscriptions
-)
+
+# TEMPORARILY DISABLED - Testing if route imports are blocking
+# from app.api.v1 import (
+#     auth,
+#     projects,
+#     integrations,
+#     orders,
+#     messages,
+#     assistant,
+#     reports,
+#     chat_bot,
+#     products,
+#     bot_training,
+#     social_media,
+#     enhanced_bot,
+#     order_management,
+#     subscriptions
+# )
 
 # Configure structured logging
 structlog.configure(
@@ -227,89 +229,90 @@ async def debug_config():
 
 
 # Include API routers
-app.include_router(
-    auth.router,
-    prefix=f"/api/{settings.API_VERSION}/auth",
-    tags=["Authentication"]
-)
+# TEMPORARILY DISABLED - Testing if routes are causing issues
+# app.include_router(
+#     auth.router,
+#     prefix=f"/api/{settings.API_VERSION}/auth",
+#     tags=["Authentication"]
+# )
+# 
+# app.include_router(
+#     projects.router,
+#     prefix=f"/api/{settings.API_VERSION}/projects",
+#     tags=["Projects"]
+# )
+# 
+# app.include_router(
+#     integrations.router,
+#     prefix=f"/api/{settings.API_VERSION}/integrations",
+#     tags=["Integrations"]
+# )
+# 
+# app.include_router(
+#     orders.router,
+#     prefix=f"/api/{settings.API_VERSION}/orders",
+#     tags=["Orders"]
+# )
+# 
+# app.include_router(
+#     messages.router,
+#     prefix=f"/api/{settings.API_VERSION}/messages",
+#     tags=["Messages"]
+# )
+# 
+# app.include_router(
+#     assistant.router,
+#     prefix=f"/api/{settings.API_VERSION}/assistant",
+#     tags=["AI Assistant"]
+# )
+# 
+# app.include_router(
+#     reports.router,
+#     prefix=f"/api/{settings.API_VERSION}/reports",
+#     tags=["Reports"]
+# )
+# 
+# app.include_router(
+#     chat_bot.router,
+#     prefix=f"/api/{settings.API_VERSION}/chat-bot",
+#     tags=["AI Chat Bot"]
+# )
+# 
+# app.include_router(
+#     products.router,
+#     prefix=f"/api/{settings.API_VERSION}/products",
+#     tags=["Products"]
+# )
+# 
+# app.include_router(
+#     bot_training.router,
+#     prefix=f"/api/{settings.API_VERSION}/bot-training",
+#     tags=["Bot Training"]
+# )
+# 
+# app.include_router(
+#     social_media.router,
+#     prefix=f"/api/{settings.API_VERSION}/social-media",
+#     tags=["Social Media"]
+# )
 
-app.include_router(
-    projects.router,
-    prefix=f"/api/{settings.API_VERSION}/projects",
-    tags=["Projects"]
-)
+# app.include_router(
+#     enhanced_bot.router,
+#     prefix=f"/api/{settings.API_VERSION}/enhanced-bot",
+#     tags=["Enhanced AI Bot"]
+# )
+# 
+# app.include_router(
+#     order_management.router,
+#     prefix=f"/api/{settings.API_VERSION}/order-management",
+#     tags=["Order Management & Automation"]
+# )
 
-app.include_router(
-    integrations.router,
-    prefix=f"/api/{settings.API_VERSION}/integrations",
-    tags=["Integrations"]
-)
-
-app.include_router(
-    orders.router,
-    prefix=f"/api/{settings.API_VERSION}/orders",
-    tags=["Orders"]
-)
-
-app.include_router(
-    messages.router,
-    prefix=f"/api/{settings.API_VERSION}/messages",
-    tags=["Messages"]
-)
-
-app.include_router(
-    assistant.router,
-    prefix=f"/api/{settings.API_VERSION}/assistant",
-    tags=["AI Assistant"]
-)
-
-app.include_router(
-    reports.router,
-    prefix=f"/api/{settings.API_VERSION}/reports",
-    tags=["Reports"]
-)
-
-app.include_router(
-    chat_bot.router,
-    prefix=f"/api/{settings.API_VERSION}/chat-bot",
-    tags=["AI Chat Bot"]
-)
-
-app.include_router(
-    products.router,
-    prefix=f"/api/{settings.API_VERSION}/products",
-    tags=["Products"]
-)
-
-app.include_router(
-    bot_training.router,
-    prefix=f"/api/{settings.API_VERSION}/bot-training",
-    tags=["Bot Training"]
-)
-
-app.include_router(
-    social_media.router,
-    prefix=f"/api/{settings.API_VERSION}/social-media",
-    tags=["Social Media"]
-)
-
-app.include_router(
-    enhanced_bot.router,
-    prefix=f"/api/{settings.API_VERSION}/enhanced-bot",
-    tags=["Enhanced AI Bot"]
-)
-
-app.include_router(
-    order_management.router,
-    prefix=f"/api/{settings.API_VERSION}/order-management",
-    tags=["Order Management & Automation"]
-)
-
-app.include_router(
-    subscriptions.router,
-    prefix=f"/api/{settings.API_VERSION}/subscriptions",
-    tags=["Subscriptions & Billing"]
-)
+# app.include_router(
+#     subscriptions.router,
+#     prefix=f"/api/{settings.API_VERSION}/subscriptions",
+#     tags=["Subscriptions & Billing"]
+# )
 
 
 if __name__ == "__main__":
