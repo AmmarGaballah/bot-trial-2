@@ -224,6 +224,31 @@ async def debug_config():
     }
 
 
+@app.post("/seed", tags=["Debug"])
+async def seed_test_account():
+    """
+    Seed database with test account.
+    Creates: test@aisales.local / AiSales2024!Demo
+    """
+    try:
+        async with AsyncSessionLocal() as session:
+            await seed_database(session)
+        return {
+            "success": True,
+            "message": "Test account created successfully",
+            "credentials": {
+                "email": "test@aisales.local",
+                "password": "AiSales2024!Demo"
+            }
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Account may already exist or database error occurred"
+        }
+
+
 # Include API routers
 app.include_router(
     auth.router,
