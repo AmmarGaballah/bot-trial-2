@@ -231,23 +231,26 @@ async def run_migrations():
     Use this if migrations didn't run automatically.
     """
     import subprocess
+    import os
     try:
         result = subprocess.run(
             ["alembic", "upgrade", "head"],
             capture_output=True,
-            text=True,
-            cwd="backend"
+            text=True
         )
         return {
             "success": result.returncode == 0,
             "stdout": result.stdout,
             "stderr": result.stderr,
+            "return_code": result.returncode,
+            "current_dir": os.getcwd(),
             "message": "Migrations completed" if result.returncode == 0 else "Migrations failed"
         }
     except Exception as e:
         return {
             "success": False,
-            "error": str(e)
+            "error": str(e),
+            "current_dir": os.getcwd()
         }
 
 
