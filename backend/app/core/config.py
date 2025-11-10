@@ -242,28 +242,24 @@ class Settings(BaseSettings):
     TWILIO_PHONE_NUMBER: Optional[str] = None
     
     # CORS
-    CORS_ORIGINS: List[str] = ["http://localhost:3000", "http://127.0.0.1:3000", "http://localhost:5173"]
+    CORS_ORIGINS: List[str] = [
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "http://localhost:5173",
+        "https://bot-trial-2.vercel.app"  # Production frontend
+    ]
     
     @validator("CORS_ORIGINS", pre=True)
     def parse_cors_origins(cls, v) -> List[str]:
-        """Parse CORS origins from JSON array or comma-separated string."""
-        import json
-        
+        """Parse comma-separated CORS origins or allow wildcard."""
         if isinstance(v, str):
-            # Try to parse as JSON array first
-            try:
-                parsed = json.loads(v)
-                if isinstance(parsed, list):
-                    return parsed
-            except (json.JSONDecodeError, ValueError):
-                pass
-            
-            # Fall back to comma-separated parsing
+            # Support wildcard for allow-all
+            if v.strip() == "*":
+                return ["*"]
+            # Comma-separated list
             return [origin.strip() for origin in v.split(",")]
-        
         if isinstance(v, list):
             return v
-        
         return ["http://localhost:3000"]
     
     # Rate Limiting
