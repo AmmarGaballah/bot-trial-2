@@ -31,10 +31,30 @@ class Settings(BaseSettings):
     PORT: int = 8000
     
     # Security
-    SECRET_KEY: str = Field(..., min_length=32)
+    SECRET_KEY: str = Field(default="", min_length=0)
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
+    
+    @validator("SECRET_KEY", pre=True, always=True)
+    def generate_secret_key_if_missing(cls, v):
+        """Auto-generate SECRET_KEY if not provided (for development/testing)."""
+        if not v or len(v) < 32:
+            import secrets
+            import structlog
+            logger = structlog.get_logger(__name__)
+            
+            # Generate a secure random key
+            generated_key = secrets.token_urlsafe(32)
+            
+            logger.warning(
+                "⚠️  SECRET_KEY not set or too short - auto-generated one",
+                key_length=len(generated_key),
+                note="Set SECRET_KEY in environment variables for production!"
+            )
+            
+            return generated_key
+        return v
     
     # Database - Single Database (simplified)
     DATABASE_URL: str = Field(default="postgresql+asyncpg://aisales:changeme@localhost:5432/aisales")
