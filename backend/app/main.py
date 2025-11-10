@@ -224,11 +224,12 @@ async def debug_config():
     }
 
 
-@app.post("/seed", tags=["Debug"])
+@app.get("/seed", tags=["Debug"])
 async def seed_test_account():
     """
     Seed database with test account.
     Creates: test@aisales.local / AiSales2024!Demo
+    Can be called by simply visiting the URL in browser.
     """
     try:
         async with AsyncSessionLocal() as session:
