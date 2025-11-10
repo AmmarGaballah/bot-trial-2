@@ -229,14 +229,38 @@ class Settings(BaseSettings):
     @validator("CORS_ORIGINS", pre=True)
     def parse_cors_origins(cls, v) -> List[str]:
         """Parse comma-separated CORS origins or allow wildcard."""
+        # Handle None or empty
+        if not v:
+            return [
+                "http://localhost:3000",
+                "http://127.0.0.1:3000", 
+                "http://localhost:5173",
+                "https://bot-trial-2.vercel.app"
+            ]
+        
         if isinstance(v, str):
+            # Handle empty string
+            v = v.strip()
+            if not v:
+                return [
+                    "http://localhost:3000",
+                    "http://127.0.0.1:3000", 
+                    "http://localhost:5173",
+                    "https://bot-trial-2.vercel.app"
+                ]
+            
             # Support wildcard for allow-all
-            if v.strip() == "*":
+            if v == "*":
                 return ["*"]
+            
             # Comma-separated list
-            return [origin.strip() for origin in v.split(",")]
+            origins = [origin.strip() for origin in v.split(",") if origin.strip()]
+            return origins if origins else ["http://localhost:3000"]
+        
         if isinstance(v, list):
             return v
+        
+        # Default fallback
         return ["http://localhost:3000"]
     
     # Rate Limiting

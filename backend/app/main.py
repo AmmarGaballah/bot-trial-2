@@ -16,24 +16,22 @@ from app.core.config import settings
 from app.core.database import init_db, close_db, AsyncSessionLocal
 from app.core.seed import seed_database
 from app.core.error_handlers import setup_error_handlers
-
-# TEMPORARILY DISABLED - Testing if route imports are blocking
-# from app.api.v1 import (
-#     auth,
-#     projects,
-#     integrations,
-#     orders,
-#     messages,
-#     assistant,
-#     reports,
-#     chat_bot,
-#     products,
-#     bot_training,
-#     social_media,
-#     enhanced_bot,
-#     order_management,
-#     subscriptions
-# )
+from app.api.v1 import (
+    auth,
+    projects,
+    integrations,
+    orders,
+    messages,
+    assistant,
+    reports,
+    chat_bot,
+    products,
+    bot_training,
+    social_media,
+    enhanced_bot,
+    order_management,
+    subscriptions
+)
 
 # Configure structured logging
 structlog.configure(
@@ -60,28 +58,29 @@ logger = structlog.get_logger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Application lifespan events."""
-    # Startup - absolutely minimal
-    print("LIFESPAN: Starting up")
+    # Startup
+    logger.info("🚀 Application starting", environment=settings.ENVIRONMENT)
+    logger.info("✅ Database ready - migrations run by start.sh")
     
     yield
     
-    # Shutdown - no database cleanup for now
-    print("LIFESPAN: Shutting down")
+    # Shutdown
+    logger.info("Application shutting down")
+    await close_db()
 
 
-# Create FastAPI application - ULTRA MINIMAL
+# Create FastAPI application
 app = FastAPI(
-    title="Test App",
-    description="Minimal test",
-    version="1.0",
-    docs_url="/docs",
-    redoc_url="/redoc",
+    title=settings.APP_NAME,
+    description="AI-powered sales automation and customer communication platform",
+    version=settings.API_VERSION,
+    docs_url="/docs" if settings.DEBUG else None,
+    redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan
 )
 
 # Setup global error handlers
-# TEMPORARILY DISABLED - Testing
-# setup_error_handlers(app)
+setup_error_handlers(app)
 
 
 # ============================================================================
@@ -89,72 +88,71 @@ app = FastAPI(
 # ============================================================================
 
 # CORS middleware
-# TEMPORARILY DISABLED - Testing
-# app.add_middleware(
-#     CORSMiddleware,
-#     allow_origins=["*"] if settings.is_development else settings.CORS_ORIGINS,
-#     allow_credentials=True,
-#     allow_methods=["*"],
-#     allow_headers=["*"],
-#     expose_headers=["X-Request-ID", "X-Process-Time"]
-# )
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"] if settings.is_development else settings.CORS_ORIGINS,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Process-Time"]
+)
 
 # Trusted host middleware (security)
-# TEMPORARILY DISABLED - causing 502 errors on Railway
+# DISABLED: Not compatible with Railway's dynamic host routing
+# Railway handles host validation at the proxy level
+# Uncomment and configure if deploying to custom domain:
 # if settings.is_production:
 #     app.add_middleware(
 #         TrustedHostMiddleware,
 #         allowed_hosts=[
 #             "*.aisalescommander.com",
 #             "aisalescommander.com",
-#             "*.railway.app",  # Railway deployments
-#             "*.up.railway.app"  # Railway public URLs
+#             "yourdomain.com"
 #         ]
 #     )
 
 
-# TEMPORARILY DISABLED - Testing
-# @app.middleware("http")
-# async def add_process_time_header(request: Request, call_next):
-#     """Add request processing time header and logging."""
-#     start_time = time.time()
-#     request_id = str(time.time_ns())
-#     
-#     try:
-#         # Process request
-#         response = await call_next(request)
-#         
-#         # Calculate processing time
-#         process_time = time.time() - start_time
-#         response.headers["X-Process-Time"] = str(process_time)
-#         response.headers["X-Request-ID"] = request_id
-#         
-#         # Log request
-#         logger.info(
-#             "Request processed",
-#             method=request.method,
-#             path=request.url.path,
-#             status_code=response.status_code,
-#             process_time=f"{process_time:.3f}s",
-#             request_id=request_id
-#         )
-#         
-#         return response
-#     
-#     except Exception as e:
-#         logger.error(
-#             "Request processing failed",
-#             error=str(e),
-#             path=request.url.path,
-#             method=request.method,
-#             request_id=request_id,
-#             exc_info=True
-#         )
-#         # Return error response instead of crashing
-#         return JSONResponse(
-#             status_code=500,
-#             content={"detail": f"Internal server error: {str(e)}"}
-#         )
+@app.middleware("http")
+async def add_process_time_header(request: Request, call_next):
+    """Add request processing time header and logging."""
+    start_time = time.time()
+    request_id = str(time.time_ns())
+    
+    try:
+        # Process request
+        response = await call_next(request)
+        
+        # Calculate processing time
+        process_time = time.time() - start_time
+        response.headers["X-Process-Time"] = str(process_time)
+        response.headers["X-Request-ID"] = request_id
+        
+        # Log request
+        logger.info(
+            "Request processed",
+            method=request.method,
+            path=request.url.path,
+            status_code=response.status_code,
+            process_time=f"{process_time:.3f}s",
+            request_id=request_id
+        )
+        
+        return response
+    
+    except Exception as e:
+        logger.error(
+            "Request processing failed",
+            error=str(e),
+            path=request.url.path,
+            method=request.method,
+            request_id=request_id,
+            exc_info=True
+        )
+        # Return error response instead of crashing
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal server error: {str(e)}"}
+        )
 
 
 # ============================================================================
@@ -170,118 +168,146 @@ app = FastAPI(
 
 @app.get("/", tags=["Health"])
 async def root():
-    """Root endpoint - ultra minimal test."""
+    """Root endpoint - health check."""
     return {
         "status": "online",
-        "message": "Ultra minimal FastAPI test",
-        "timestamp": time.time()
+        "app": settings.APP_NAME,
+        "version": settings.API_VERSION,
+        "environment": settings.ENVIRONMENT
     }
 
 
 @app.get("/health", tags=["Health"])
 async def health_check():
-    """Simple health check - no database test."""
+    """Detailed health check endpoint with database test."""
+    from sqlalchemy import text
+    
+    db_status = "unknown"
+    db_error = None
+    
+    # Test database connection
+    try:
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        db_status = "connected"
+    except Exception as e:
+        db_status = "error"
+        db_error = str(e)
+    
     return {
-        "status": "healthy",
-        "message": "App is running",
-        "timestamp": time.time()
+        "status": "healthy" if db_status == "connected" else "degraded",
+        "database": db_status,
+        "database_error": db_error,
+        "timestamp": time.time(),
+        "environment": settings.ENVIRONMENT
     }
 
 
-@app.get("/test", tags=["Test"])
-async def test_endpoint():
-    """Test endpoint to verify routing works."""
+@app.get("/debug/config", tags=["Debug"])
+async def debug_config():
+    """Debug endpoint to check configuration."""
+    db_host = "unknown"
+    if settings.DATABASE_URL and "@" in settings.DATABASE_URL:
+        try:
+            db_host = settings.DATABASE_URL.split("@")[1].split("/")[0]
+        except:
+            db_host = "parse_error"
+    
     return {
-        "test": "success",
-        "message": "If you see this, the app is working!"
+        "environment": settings.ENVIRONMENT,
+        "cors_origins": settings.CORS_ORIGINS,
+        "testing_mode": settings.TESTING_MODE,
+        "has_secret_key": bool(settings.SECRET_KEY),
+        "has_database_url": bool(settings.DATABASE_URL),
+        "db_host": db_host,
+        "db_driver": "asyncpg" if "asyncpg" in settings.DATABASE_URL else "unknown"
     }
 
 
 # Include API routers
-# TEMPORARILY DISABLED - Testing if routes are causing issues
-# app.include_router(
-#     auth.router,
-#     prefix=f"/api/{settings.API_VERSION}/auth",
-#     tags=["Authentication"]
-# )
-# 
-# app.include_router(
-#     projects.router,
-#     prefix=f"/api/{settings.API_VERSION}/projects",
-#     tags=["Projects"]
-# )
-# 
-# app.include_router(
-#     integrations.router,
-#     prefix=f"/api/{settings.API_VERSION}/integrations",
-#     tags=["Integrations"]
-# )
-# 
-# app.include_router(
-#     orders.router,
-#     prefix=f"/api/{settings.API_VERSION}/orders",
-#     tags=["Orders"]
-# )
-# 
-# app.include_router(
-#     messages.router,
-#     prefix=f"/api/{settings.API_VERSION}/messages",
-#     tags=["Messages"]
-# )
-# 
-# app.include_router(
-#     assistant.router,
-#     prefix=f"/api/{settings.API_VERSION}/assistant",
-#     tags=["AI Assistant"]
-# )
-# 
-# app.include_router(
-#     reports.router,
-#     prefix=f"/api/{settings.API_VERSION}/reports",
-#     tags=["Reports"]
-# )
-# 
-# app.include_router(
-#     chat_bot.router,
-#     prefix=f"/api/{settings.API_VERSION}/chat-bot",
-#     tags=["AI Chat Bot"]
-# )
-# 
-# app.include_router(
-#     products.router,
-#     prefix=f"/api/{settings.API_VERSION}/products",
-#     tags=["Products"]
-# )
-# 
-# app.include_router(
-#     bot_training.router,
-#     prefix=f"/api/{settings.API_VERSION}/bot-training",
-#     tags=["Bot Training"]
-# )
-# 
-# app.include_router(
-#     social_media.router,
-#     prefix=f"/api/{settings.API_VERSION}/social-media",
-#     tags=["Social Media"]
-# )
+app.include_router(
+    auth.router,
+    prefix=f"/api/{settings.API_VERSION}/auth",
+    tags=["Authentication"]
+)
 
-# app.include_router(
-#     enhanced_bot.router,
-#     prefix=f"/api/{settings.API_VERSION}/enhanced-bot",
-#     tags=["Enhanced AI Bot"]
-# )
-# 
-# app.include_router(
-#     order_management.router,
-#     prefix=f"/api/{settings.API_VERSION}/order-management",
-#     tags=["Order Management & Automation"]
-# )
+app.include_router(
+    projects.router,
+    prefix=f"/api/{settings.API_VERSION}/projects",
+    tags=["Projects"]
+)
 
-# app.include_router(
-#     subscriptions.router,
-#     prefix=f"/api/{settings.API_VERSION}/subscriptions",
-#     tags=["Subscriptions & Billing"]
-# )
+app.include_router(
+    integrations.router,
+    prefix=f"/api/{settings.API_VERSION}/integrations",
+    tags=["Integrations"]
+)
+
+app.include_router(
+    orders.router,
+    prefix=f"/api/{settings.API_VERSION}/orders",
+    tags=["Orders"]
+)
+
+app.include_router(
+    messages.router,
+    prefix=f"/api/{settings.API_VERSION}/messages",
+    tags=["Messages"]
+)
+
+app.include_router(
+    assistant.router,
+    prefix=f"/api/{settings.API_VERSION}/assistant",
+    tags=["AI Assistant"]
+)
+
+app.include_router(
+    reports.router,
+    prefix=f"/api/{settings.API_VERSION}/reports",
+    tags=["Reports"]
+)
+
+app.include_router(
+    chat_bot.router,
+    prefix=f"/api/{settings.API_VERSION}/chat-bot",
+    tags=["AI Chat Bot"]
+)
+
+app.include_router(
+    products.router,
+    prefix=f"/api/{settings.API_VERSION}/products",
+    tags=["Products"]
+)
+
+app.include_router(
+    bot_training.router,
+    prefix=f"/api/{settings.API_VERSION}/bot-training",
+    tags=["Bot Training"]
+)
+
+app.include_router(
+    social_media.router,
+    prefix=f"/api/{settings.API_VERSION}/social-media",
+    tags=["Social Media"]
+)
+
+app.include_router(
+    enhanced_bot.router,
+    prefix=f"/api/{settings.API_VERSION}/enhanced-bot",
+    tags=["Enhanced AI Bot"]
+)
+
+app.include_router(
+    order_management.router,
+    prefix=f"/api/{settings.API_VERSION}/order-management",
+    tags=["Order Management & Automation"]
+)
+
+app.include_router(
+    subscriptions.router,
+    prefix=f"/api/{settings.API_VERSION}/subscriptions",
+    tags=["Subscriptions & Billing"]
+)
 
 
 if __name__ == "__main__":
