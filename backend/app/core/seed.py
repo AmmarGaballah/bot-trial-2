@@ -94,22 +94,22 @@ async def create_demo_project(db: AsyncSession, user: User) -> Project:
     return demo_project
 
 
-async def seed_database(auth_db: AsyncSession, app_db: AsyncSession):
+async def seed_database(db: AsyncSession):
     """
     Seed database with test account for localhost.
     
     Creates:
-    - Test user: test@aisales.local / AiSales2024!Demo (in auth database)
-    - Demo project for testing (in app database)
+    - Test user: test@aisales.local / AiSales2024!Demo
+    - Demo project for testing
     """
     logger.info("🌱 Seeding database with test account...")
     
     try:
-        # Create test user in auth database
-        test_user = await create_test_account(auth_db)
+        # Create test user
+        test_user = await create_test_account(db)
         
-        # Create demo project in app database
-        await create_demo_project(app_db, test_user)
+        # Create demo project
+        await create_demo_project(db, test_user)
         
         logger.info("=" * 60)
         logger.info("✅ DATABASE READY FOR TESTING!")

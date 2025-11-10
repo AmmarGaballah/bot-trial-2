@@ -13,7 +13,7 @@ import time
 import structlog
 
 from app.core.config import settings
-from app.core.database import init_db, close_db, AuthSessionLocal, AppSessionLocal
+from app.core.database import init_db, close_db, AsyncSessionLocal
 from app.core.seed import seed_database
 from app.core.error_handlers import setup_error_handlers
 from app.api.v1 import (
@@ -61,21 +61,18 @@ async def lifespan(app: FastAPI):
     # Startup
     logger.info("Application starting", environment=settings.ENVIRONMENT)
     
-    # Initialize database (for dev only, use Alembic in production)
-    # TEMPORARILY DISABLED: Database init skipped to allow server to start
-    # Database connection will happen when endpoints are called
-    # if settings.is_development:
-    #     await init_db()
-    #     logger.info("Database initialized")
-    #     
-    #     # Seed database with test account
-    #     async with AuthSessionLocal() as auth_db, AppSessionLocal() as app_db:
-    #         try:
-    #             await seed_database(auth_db, app_db)
-    #         except Exception as e:
-    #             logger.error("Failed to seed database", error=str(e))
+    # Test database connection on startup
+    try:
+        from sqlalchemy import text
+        async with AsyncSessionLocal() as session:
+            await session.execute(text("SELECT 1"))
+        logger.info("✅ Database connection test passed")
+    except Exception as e:
+        logger.error("❌ Database connection test failed", error=str(e), exc_info=True)
+        # Don't crash on startup, but log the error
     
-    logger.info("⚠️  Database init skipped - will connect on first request")
+    # Database tables are created via Alembic migrations
+    logger.info("Database ready - using Alembic migrations for schema")
     
     yield
     
@@ -113,16 +110,17 @@ app.add_middleware(
 )
 
 # Trusted host middleware (security)
-if settings.is_production:
-    app.add_middleware(
-        TrustedHostMiddleware,
-        allowed_hosts=[
-            "*.aisalescommander.com",
-            "aisalescommander.com",
-            "*.railway.app",  # Railway deployments
-            "*.up.railway.app"  # Railway public URLs
-        ]
-    )
+# TEMPORARILY DISABLED - causing 502 errors on Railway
+# if settings.is_production:
+#     app.add_middleware(
+#         TrustedHostMiddleware,
+#         allowed_hosts=[
+#             "*.aisalescommander.com",
+#             "aisalescommander.com",
+#             "*.railway.app",  # Railway deployments
+#             "*.up.railway.app"  # Railway public URLs
+#         ]
+#     )
 
 
 @app.middleware("http")
@@ -171,48 +169,8 @@ async def add_process_time_header(request: Request, call_next):
 # ============================================================================
 # Exception Handlers
 # ============================================================================
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    """Handle validation errors with detailed messages."""
-    
-    # Clean up errors to make them JSON serializable
-    errors = []
-    for error in exc.errors():
-        clean_error = dict(error)
-        # Convert bytes to string in the input field
-        if 'input' in clean_error and isinstance(clean_error['input'], bytes):
-            clean_error['input'] = clean_error['input'].decode('utf-8', errors='replace')
-        errors.append(clean_error)
-    
-    logger.warning("Validation error", errors=errors, path=request.url.path)
-    
-    return JSONResponse(
-        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={
-            "detail": "Validation error",  
-            "errors": errors
-        }
-    )
-
-
-@app.exception_handler(Exception)
-async def general_exception_handler(request: Request, exc: Exception):
-    """Handle unexpected errors."""
-    logger.error(
-        "Unexpected error",
-        error=str(exc),
-        path=request.url.path,
-        exc_info=True
-    )
-    
-    return JSONResponse(
-        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        content={
-            "detail": "Internal server error",
-            "error": str(exc) if settings.DEBUG else "An unexpected error occurred"
-        }
-    )
+# Note: All exception handlers are registered in setup_error_handlers(app) above
+# See app/core/error_handlers.py for the actual handler implementations
 
 
 # ============================================================================
@@ -238,6 +196,27 @@ async def health_check():
         "database": "connected",  # TODO: Add actual DB health check
         "redis": "connected",     # TODO: Add actual Redis health check
         "timestamp": time.time()
+    }
+
+
+@app.get("/debug/config", tags=["Debug"])
+async def debug_config():
+    """Debug endpoint to check configuration (disable in production!)."""
+    db_host = "unknown"
+    if settings.DATABASE_URL and "@" in settings.DATABASE_URL:
+        try:
+            db_host = settings.DATABASE_URL.split("@")[1].split("/")[0]
+        except:
+            db_host = "parse_error"
+    
+    return {
+        "environment": settings.ENVIRONMENT,
+        "cors_origins": settings.CORS_ORIGINS,
+        "testing_mode": settings.TESTING_MODE,
+        "has_secret_key": bool(settings.SECRET_KEY),
+        "has_database_url": bool(settings.DATABASE_URL),
+        "db_host": db_host,
+        "db_driver": "asyncpg" if "asyncpg" in settings.DATABASE_URL else "unknown"
     }
 
 

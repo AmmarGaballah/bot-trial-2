@@ -36,13 +36,8 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # Database - Dual Database Architecture
-    # Auth Database (for users, authentication)
-    AUTH_DATABASE_URL: str
-    # Application Database (for projects, orders, messages, etc.)
-    APP_DATABASE_URL: str
-    # Legacy support (defaults to app database if not specified)
-    DATABASE_URL: Optional[str] = None
+    # Database - Single Database (simplified)
+    DATABASE_URL: str = Field(default="postgresql+asyncpg://aisales:changeme@localhost:5432/aisales")
     
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 0
@@ -52,7 +47,7 @@ class Settings(BaseSettings):
     def convert_database_url(cls, v):
         """Convert postgres:// to postgresql+asyncpg:// for SQLAlchemy async support."""
         if not v:
-            return v
+            return "postgresql+asyncpg://aisales:changeme@localhost:5432/aisales"
         
         # Handle Railway/Render postgres:// URLs
         if v.startswith("postgres://"):
@@ -61,44 +56,6 @@ class Settings(BaseSettings):
         elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
             v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
         # Handle malformed URLs with double protocol
-        elif "postgresql+asyncpg:postgresql://" in v:
-            v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
-        
-        return v
-    
-    @validator("AUTH_DATABASE_URL", pre=True, always=True)
-    def set_auth_database_url(cls, v, values):
-        """Set AUTH_DATABASE_URL from DATABASE_URL if not provided, with asyncpg driver."""
-        if v is None and "DATABASE_URL" in values:
-            v = values.get("DATABASE_URL")
-        
-        if not v:
-            return "postgresql+asyncpg://aisales:changeme@postgres:5432/aisales_auth"
-        
-        # Apply same conversion as DATABASE_URL
-        if v.startswith("postgres://"):
-            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
-            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
-        elif "postgresql+asyncpg:postgresql://" in v:
-            v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
-        
-        return v
-    
-    @validator("APP_DATABASE_URL", pre=True, always=True)
-    def set_app_database_url(cls, v, values):
-        """Set APP_DATABASE_URL from DATABASE_URL if not provided, with asyncpg driver."""
-        if v is None and "DATABASE_URL" in values:
-            v = values.get("DATABASE_URL")
-        
-        if not v:
-            return "postgresql+asyncpg://aisales:changeme@postgres:5432/aisales_app"
-        
-        # Apply same conversion as DATABASE_URL
-        if v.startswith("postgres://"):
-            v = v.replace("postgres://", "postgresql+asyncpg://", 1)
-        elif v.startswith("postgresql://") and "postgresql+asyncpg://" not in v:
-            v = v.replace("postgresql://", "postgresql+asyncpg://", 1)
         elif "postgresql+asyncpg:postgresql://" in v:
             v = v.replace("postgresql+asyncpg:postgresql://", "postgresql+asyncpg://", 1)
         
