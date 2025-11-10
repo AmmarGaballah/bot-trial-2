@@ -246,11 +246,24 @@ class Settings(BaseSettings):
     
     @validator("CORS_ORIGINS", pre=True)
     def parse_cors_origins(cls, v) -> List[str]:
-        """Parse comma-separated CORS origins."""
+        """Parse CORS origins from JSON array or comma-separated string."""
+        import json
+        
         if isinstance(v, str):
+            # Try to parse as JSON array first
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return parsed
+            except (json.JSONDecodeError, ValueError):
+                pass
+            
+            # Fall back to comma-separated parsing
             return [origin.strip() for origin in v.split(",")]
+        
         if isinstance(v, list):
             return v
+        
         return ["http://localhost:3000"]
     
     # Rate Limiting
