@@ -224,6 +224,90 @@ async def debug_config():
     }
 
 
+@app.get("/check-enums", tags=["Debug"])
+async def check_enums():
+    """
+    Check valid ENUM values for role and subscription fields.
+    Shows what values are actually allowed in the database.
+    """
+    from sqlalchemy import text
+    try:
+        async with AsyncSessionLocal() as session:
+            # Get ENUM types and their values
+            result = await session.execute(text("""
+                SELECT t.typname, e.enumlabel
+                FROM pg_type t 
+                JOIN pg_enum e ON t.oid = e.enumtypid  
+                WHERE t.typname IN ('userrole', 'subscriptiontier', 'subscriptionstatus')
+                ORDER BY t.typname, e.enumsortorder
+            """))
+            enums = result.fetchall()
+            
+            # Group by type
+            enum_dict = {}
+            for type_name, value in enums:
+                if type_name not in enum_dict:
+                    enum_dict[type_name] = []
+                enum_dict[type_name].append(value)
+            
+            return {
+                "success": True,
+                "enums": enum_dict,
+                "valid_roles": enum_dict.get('userrole', ['ADMIN', 'USER', 'MANAGER']),
+                "valid_subscription_tiers": enum_dict.get('subscriptiontier', ['FREE', 'BASIC', 'PRO']),
+                "valid_subscription_statuses": enum_dict.get('subscriptionstatus', ['ACTIVE', 'INACTIVE'])
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "message": "Could not fetch ENUM values. Using defaults.",
+            "defaults": {
+                "valid_roles": ["ADMIN", "USER", "MANAGER"],
+                "valid_subscription_tiers": ["FREE", "BASIC", "PRO", "ENTERPRISE"],
+                "valid_subscription_statuses": ["ACTIVE", "INACTIVE", "CANCELLED"]
+            }
+        }
+
+
+@app.get("/hash-password", tags=["Debug"])
+async def hash_password(password: str):
+    """
+    Generate a bcrypt hash for a password.
+    Use this to manually create users in the database.
+    
+    Example: /hash-password?password=MyPassword123
+    """
+    from app.core.security import get_password_hash
+    
+    if not password or len(password) < 8:
+        return {
+            "error": "Password must be at least 8 characters"
+        }
+    
+    password_hash = get_password_hash(password)
+    
+    return {
+        "password": password,
+        "password_hash": password_hash,
+        "instructions": "Use the SQL below in Railway Database → Data tab",
+        "sql_example": f"""
+-- Copy and modify this SQL to insert user:
+INSERT INTO users (id, email, password_hash, name, role, is_active, created_at, updated_at)
+VALUES (
+    gen_random_uuid(),
+    'your@email.com',
+    '{password_hash}',
+    'Your Name',
+    'ADMIN',
+    true,
+    NOW(),
+    NOW()
+);
+        """
+    }
+
+
 @app.get("/check-schema", tags=["Debug"])
 async def check_schema():
     """
