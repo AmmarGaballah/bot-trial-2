@@ -224,6 +224,39 @@ async def debug_config():
     }
 
 
+@app.get("/check-schema", tags=["Debug"])
+async def check_schema():
+    """
+    Check if users table has the required columns.
+    """
+    from sqlalchemy import text
+    try:
+        async with AsyncSessionLocal() as session:
+            # Get column names from users table
+            result = await session.execute(text("""
+                SELECT column_name, data_type 
+                FROM information_schema.columns 
+                WHERE table_name = 'users'
+                ORDER BY ordinal_position
+            """))
+            columns = result.fetchall()
+            
+            column_list = [{"name": col[0], "type": col[1]} for col in columns]
+            has_subscription_tier = any(col[0] == 'subscription_tier' for col in columns)
+            
+            return {
+                "success": True,
+                "total_columns": len(columns),
+                "has_subscription_tier": has_subscription_tier,
+                "columns": column_list
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/migrate", tags=["Debug"])
 async def run_migrations():
     """
@@ -254,6 +287,78 @@ async def run_migrations():
         }
 
 
+@app.get("/seed-direct", tags=["Debug"])
+async def seed_direct():
+    """
+    Seed database using direct SQL (bypasses ORM).
+    Creates: test@aisales.local / AiSales2024!Demo
+    """
+    from sqlalchemy import text
+    from app.core.security import get_password_hash
+    import uuid
+    from datetime import datetime
+    
+    try:
+        async with AsyncSessionLocal() as session:
+            # Check if user exists
+            check = await session.execute(
+                text("SELECT id FROM users WHERE email = :email"),
+                {"email": "test@aisales.local"}
+            )
+            existing = check.fetchone()
+            
+            if existing:
+                return {
+                    "success": True,
+                    "message": "Account already exists",
+                    "credentials": {
+                        "email": "test@aisales.local",
+                        "password": "AiSales2024!Demo"
+                    }
+                }
+            
+            # Create user with direct SQL
+            user_id = str(uuid.uuid4())
+            password_hash = get_password_hash("AiSales2024!Demo")
+            now = datetime.utcnow()
+            
+            await session.execute(text("""
+                INSERT INTO users (
+                    id, email, password_hash, name, role, is_active, 
+                    created_at, updated_at
+                )
+                VALUES (
+                    :id, :email, :password_hash, :name, :role, :is_active,
+                    :created_at, :updated_at
+                )
+            """), {
+                "id": user_id,
+                "email": "test@aisales.local",
+                "password_hash": password_hash,
+                "name": "Test User",
+                "role": "admin",
+                "is_active": True,
+                "created_at": now,
+                "updated_at": now
+            })
+            
+            await session.commit()
+            
+            return {
+                "success": True,
+                "message": "Test account created successfully (direct SQL)",
+                "credentials": {
+                    "email": "test@aisales.local",
+                    "password": "AiSales2024!Demo"
+                }
+            }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e)
+        }
+
+
 @app.get("/seed", tags=["Debug"])
 async def seed_test_account():
     """
@@ -278,7 +383,7 @@ async def seed_test_account():
         return {
             "success": False,
             "error": str(e),
-            "message": "Database schema error - run /migrate endpoint first, then try /seed again"
+            "message": "Database schema error - try /seed-direct endpoint instead"
         }
 
 
