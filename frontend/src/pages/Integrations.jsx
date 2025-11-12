@@ -286,18 +286,25 @@ export default function Integrations() {
   const [selectedInstructions, setSelectedInstructions] = useState(null);
 
   // Fetch integrations
-  const { data: connectedIntegrations, isLoading } = useQuery({
+  const { data: connectedIntegrations, isLoading, refetch } = useQuery({
     queryKey: ['integrations', currentProject?.id],
     queryFn: () => integrations.list(currentProject?.id),
     enabled: !!currentProject,
+    onSuccess: (data) => {
+      console.log('Integrations fetched:', data);
+    }
   });
 
   // Connect mutation
   const connectMutation = useMutation({
     mutationFn: (data) => integrations.create(currentProject?.id, data),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      console.log('Integration connected successfully:', data);
       toast.success('Integration connected successfully!');
-      queryClient.invalidateQueries(['integrations']);
+      // Fix: Use the correct query key that matches the useQuery
+      queryClient.invalidateQueries(['integrations', currentProject?.id]);
+      // Also manually refetch to ensure immediate update
+      refetch();
       setShowModal(false);
       setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '' });
       setConnectingProvider(null);
@@ -314,7 +321,8 @@ export default function Integrations() {
       integrations.sync(projectId, integrationId),
     onSuccess: () => {
       toast.success('Sync started successfully');
-      queryClient.invalidateQueries(['integrations']);
+      // Fix: Use the correct query key that matches the useQuery
+      queryClient.invalidateQueries(['integrations', currentProject?.id]);
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Sync failed');
@@ -322,14 +330,18 @@ export default function Integrations() {
   });
 
   const getIntegrationStatus = (provider) => {
-    const integration = connectedIntegrations?.data?.find(
+    // Handle both direct array and nested data structure
+    const integrations = connectedIntegrations?.data || connectedIntegrations || [];
+    const integration = integrations.find(
       (i) => i.provider === provider
     );
     return integration?.status || 'disconnected';
   };
 
   const getIntegrationId = (provider) => {
-    const integration = connectedIntegrations?.data?.find(
+    // Handle both direct array and nested data structure
+    const integrations = connectedIntegrations?.data || connectedIntegrations || [];
+    const integration = integrations.find(
       (i) => i.provider === provider
     );
     return integration?.id;
