@@ -14,22 +14,28 @@ const getAuthToken = () => {
 async function apiRequest(endpoint, options = {}) {
   const token = getAuthToken();
   
-  const headers = {
-    'Content-Type': 'application/json',
-    ...(token && { 'Authorization': `Bearer ${token}` }),
-    ...options.headers,
-  };
-
   const config = {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token && { Authorization: `Bearer ${token}` }),
+    },
     ...options,
-    headers,
   };
 
   const response = await fetch(`${API_BASE_URL}${endpoint}`, config);
-  
+
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'An error occurred' }));
-    throw new Error(error.detail || 'Request failed');
+    // Handle 401 Unauthorized - redirect to login
+    if (response.status === 401) {
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('refresh_token');
+      window.location.href = '/login';
+      throw new Error('Authentication required. Please log in again.');
+    }
+    
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
   return response.json();
@@ -301,6 +307,45 @@ export const subscriptions = {
   },
 };
 
+// Bot Training API
+export const botTraining = {
+  getInstructions: async (projectId) => {
+    return apiRequest(`/api/v1/bot-training/${projectId}/instructions`);
+  },
+
+  createInstruction: async (projectId, data) => {
+    return apiRequest(`/api/v1/bot-training/${projectId}/instructions`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  updateInstruction: async (projectId, instructionId, data) => {
+    return apiRequest(`/api/v1/bot-training/${projectId}/instructions/${instructionId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  deleteInstruction: async (projectId, instructionId) => {
+    return apiRequest(`/api/v1/bot-training/${projectId}/instructions/${instructionId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  toggleInstruction: async (projectId, instructionId) => {
+    return apiRequest(`/api/v1/bot-training/${projectId}/instructions/${instructionId}/toggle`, {
+      method: 'POST',
+    });
+  },
+
+  seedInstructions: async (projectId) => {
+    return apiRequest(`/api/v1/bot-training/${projectId}/seed-instructions`, {
+      method: 'POST',
+    });
+  },
+};
+
 export default {
   auth,
   projects,
@@ -310,4 +355,5 @@ export default {
   integrations,
   assistant,
   subscriptions,
+  botTraining,
 };
