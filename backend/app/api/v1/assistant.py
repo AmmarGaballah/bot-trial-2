@@ -163,20 +163,24 @@ async def query_assistant(
             user_id=UUID(user_id)  # Pass user_id for tracking
         )
         
-        # Log API usage
-        api_log = APILog(
-            project_id=query.project_id,
-            user_id=UUID(user_id),
-            endpoint="/api/v1/assistant/query",
-            method="POST",
-            request={"message": query.message, "context_keys": list(context.keys())},
-            response={"text_length": len(response.get("text", ""))},
-            status_code=200,
-            ai_tokens_used=response.get("tokens_used", 0),
-            cost_estimate=response.get("cost", 0.0)
-        )
-        db.add(api_log)
-        await db.commit()
+        # Log API usage (non-blocking)
+        try:
+            api_log = APILog(
+                project_id=query.project_id,
+                user_id=UUID(user_id),
+                endpoint="/api/v1/assistant/query",
+                method="POST",
+                request={"message": query.message, "context_keys": list(context.keys())},
+                response={"text_length": len(response.get("text", ""))},
+                status_code=200,
+                ai_tokens_used=response.get("tokens_used", 0),
+                cost_estimate=response.get("cost", 0.0)
+            )
+            db.add(api_log)
+            await db.commit()
+        except Exception as log_error:
+            logger.warning("Failed to log API usage", error=str(log_error))
+            await db.rollback()  # Rollback failed transaction
         
         # Parse function calls
         function_calls = []
@@ -335,20 +339,24 @@ async def generate_reply(
             conversation_history=conversation_history
         )
         
-        # Log API usage
-        api_log = APILog(
-            project_id=project_id,
-            user_id=UUID(user_id),
-            endpoint="/api/v1/assistant/generate-reply",
-            method="POST",
-            request={"order_id": str(order_id)},
-            response={"text_length": len(response.get("text", ""))},
-            status_code=200,
-            ai_tokens_used=response.get("tokens_used", 0),
-            cost_estimate=response.get("cost", 0.0)
-        )
-        db.add(api_log)
-        await db.commit()
+        # Log API usage (non-blocking)
+        try:
+            api_log = APILog(
+                project_id=project_id,
+                user_id=UUID(user_id),
+                endpoint="/api/v1/assistant/generate-reply",
+                method="POST",
+                request={"order_id": str(order_id)},
+                response={"text_length": len(response.get("text", ""))},
+                status_code=200,
+                ai_tokens_used=response.get("tokens_used", 0),
+                cost_estimate=response.get("cost", 0.0)
+            )
+            db.add(api_log)
+            await db.commit()
+        except Exception as log_error:
+            logger.warning("Failed to log API usage", error=str(log_error))
+            await db.rollback()
         
         # Parse function calls
         function_calls = []
@@ -392,18 +400,22 @@ async def analyze_sentiment(
     try:
         analysis = await gemini_client.analyze_sentiment(message)
         
-        # Log API usage (simplified)
-        api_log = APILog(
-            project_id=project_id,
-            user_id=UUID(user_id),
-            endpoint="/api/v1/assistant/analyze-sentiment",
-            method="POST",
-            request={"message_length": len(message)},
-            response=analysis,
-            status_code=200
-        )
-        db.add(api_log)
-        await db.commit()
+        # Log API usage (non-blocking)
+        try:
+            api_log = APILog(
+                project_id=project_id,
+                user_id=UUID(user_id),
+                endpoint="/api/v1/assistant/analyze-sentiment",
+                method="POST",
+                request={"message_length": len(message)},
+                response=analysis,
+                status_code=200
+            )
+            db.add(api_log)
+            await db.commit()
+        except Exception as log_error:
+            logger.warning("Failed to log API usage", error=str(log_error))
+            await db.rollback()
         
         return analysis
         
