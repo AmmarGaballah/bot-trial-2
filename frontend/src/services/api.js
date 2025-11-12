@@ -38,9 +38,7 @@ async function apiRequest(endpoint, options = {}) {
 // Auth API
 export const auth = {
   login: async (email, password) => {
-    // TEMPORARY: Using test-login endpoint for local testing
-    // Change back to /api/v1/auth/login for production
-    const response = await fetch(`${API_BASE_URL}/api/v1/auth/test-login`, {
+    const response = await fetch(`${API_BASE_URL}/api/v1/auth/login`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -52,16 +50,15 @@ export const auth = {
     });
 
     if (!response.ok) {
-      throw new Error('Login failed');
+      const error = await response.json().catch(() => ({ detail: 'Login failed' }));
+      throw new Error(error.detail || 'Login failed');
     }
 
     return response.json();
   },
 
   me: async () => {
-    // TEMPORARY: Using test-me endpoint for local testing
-    // Change back to /api/v1/auth/me for production
-    return apiRequest('/api/v1/auth/test-me');
+    return apiRequest('/api/v1/auth/me');
   },
 
   logout: async () => {
