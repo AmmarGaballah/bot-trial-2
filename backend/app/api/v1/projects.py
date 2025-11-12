@@ -160,3 +160,39 @@ async def delete_project(
     logger.info("Project deleted", project_id=str(project_id), user_id=user_id)
     
     return None
+
+
+async def verify_project_access(
+    project_id: UUID, 
+    user_id: str, 
+    db: AsyncSession
+) -> Project:
+    """
+    Verify that a user has access to a project.
+    
+    Args:
+        project_id: The project UUID to check
+        user_id: The user ID to verify access for
+        db: Database session
+        
+    Returns:
+        Project: The project if access is granted
+        
+    Raises:
+        HTTPException: If project not found or access denied
+    """
+    result = await db.execute(
+        select(Project).where(
+            Project.id == project_id,
+            Project.owner_id == UUID(user_id)
+        )
+    )
+    project = result.scalar_one_or_none()
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found or access denied"
+        )
+    
+    return project
