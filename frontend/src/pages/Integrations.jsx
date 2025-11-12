@@ -406,13 +406,17 @@ export default function Integrations() {
       configData.shop_domain = credentials.shopDomain;
     }
     
-    connectMutation.mutate({
+    const requestData = {
       provider: selectedProvider.id,
-      credentials: configData,
       config: {
+        ...configData,
         auto_sync: true,
       }
-    });
+    };
+    
+    console.log('Connecting integration with data:', requestData);
+    
+    connectMutation.mutate(requestData);
   };
 
   const handleSync = (provider) => {

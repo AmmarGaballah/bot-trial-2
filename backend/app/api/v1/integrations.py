@@ -407,8 +407,11 @@ async def _setup_telegram_integration(integration: Integration, db: AsyncSession
     import httpx
     from app.core.config import settings
     
+    logger.info("Setting up Telegram integration", config_keys=list(integration.config.keys()) if integration.config else [])
+    
     bot_token = integration.config.get("api_key")
     if not bot_token:
+        logger.error("No bot token found in config", config=integration.config)
         raise ValueError("Telegram bot token is required")
     
     # Verify bot token by getting bot info
