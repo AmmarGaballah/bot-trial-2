@@ -96,11 +96,13 @@ app.add_middleware(
         "http://localhost:3000",
         "http://127.0.0.1:3000", 
         "http://localhost:5173",
+        "http://localhost:5174",
         "https://bot-trial-2.vercel.app",
-        "*"  # Allow all origins for now to fix CORS issues
+        "https://bot-trial-2-git-main-badass-projects-8e1b0c9b.vercel.app",
+        "https://bot-trial-2-badass-projects-8e1b0c9b.vercel.app"
     ],
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["X-Request-ID", "X-Process-Time"]
 )

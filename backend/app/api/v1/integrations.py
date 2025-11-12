@@ -62,82 +62,113 @@ async def connect_integration(
         "Connecting integration",
         provider=integration_data.provider.value,
         config_keys=list(integration_data.config.keys()) if integration_data.config else [],
+        config_has_api_key="api_key" in integration_data.config if integration_data.config else False,
+        config_api_key_length=len(integration_data.config.get("api_key", "")) if integration_data.config else 0,
         project_id=str(project_id)
     )
     
-    # Check if integration already exists
-    result = await db.execute(
-        select(Integration)
-        .where(Integration.project_id == project_id)
-        .where(Integration.provider == integration_data.provider.value)
-    )
-    existing = result.scalar_one_or_none()
+    # Validate required config
+    if not integration_data.config or not integration_data.config.get("api_key"):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="API key is required in config"
+        )
     
-    if existing:
-        # Update existing integration instead of failing
-        existing.config = integration_data.config
-        existing.status = IntegrationStatus.PENDING
-        existing.updated_at = func.now()
-        
-        await db.commit()
-        await db.refresh(existing)
-        
-        # Re-fetch the integration to ensure config is properly loaded
+    integration_id = None
+    
+    try:
+        # Check if integration already exists
         result = await db.execute(
             select(Integration)
-            .where(Integration.id == existing.id)
+            .where(Integration.project_id == project_id)
+            .where(Integration.provider == integration_data.provider.value)
         )
-        refreshed_integration = result.scalar_one()
+        existing = result.scalar_one_or_none()
         
-        try:
-            await _verify_and_setup_integration(refreshed_integration, db)
-        except Exception as e:
-            logger.error("Failed to verify integration", error=str(e))
-            # Keep as pending if verification fails
+        if existing:
+            # Update existing integration
+            existing.config = integration_data.config
+            existing.status = IntegrationStatus.PENDING
+            existing.updated_at = func.now()
+            integration_id = existing.id
+            
+            logger.info("Updating existing integration", integration_id=str(integration_id))
+        else:
+            # Create new integration
+            new_integration = Integration(
+                project_id=project_id,
+                provider=integration_data.provider.value,
+                config=integration_data.config,
+                status=IntegrationStatus.PENDING
+            )
+            db.add(new_integration)
+            integration_id = new_integration.id
+            
+            logger.info("Creating new integration", integration_id=str(integration_id))
+        
+        # Commit the changes
+        await db.commit()
+        
+        # Fresh query to get the integration with committed data
+        result = await db.execute(
+            select(Integration)
+            .where(Integration.id == integration_id)
+        )
+        integration = result.scalar_one()
         
         logger.info(
-            "Integration updated",
-            integration_id=str(existing.id),
-            provider=integration_data.provider.value,
-            project_id=str(project_id)
+            "Integration saved, starting verification",
+            integration_id=str(integration.id),
+            config_keys=list(integration.config.keys()) if integration.config else [],
+            has_api_key="api_key" in integration.config if integration.config else False
         )
         
-        return existing
-    
-    # Create new integration
-    new_integration = Integration(
-        project_id=project_id,
-        provider=integration_data.provider.value,
-        config=integration_data.config,
-        status=IntegrationStatus.PENDING
-    )
-    
-    db.add(new_integration)
-    await db.commit()
-    await db.refresh(new_integration)
-    
-    # Re-fetch the integration to ensure config is properly loaded
-    result = await db.execute(
-        select(Integration)
-        .where(Integration.id == new_integration.id)
-    )
-    refreshed_integration = result.scalar_one()
-    
-    # Verify connection and setup webhook
-    try:
-        await _verify_and_setup_integration(refreshed_integration, db)
+        # Verify and setup integration
+        try:
+            await _verify_and_setup_integration(integration, db)
+            logger.info("Integration verification successful", integration_id=str(integration.id))
+        except Exception as e:
+            logger.error("Integration verification failed", error=str(e), integration_id=str(integration.id))
+            # Keep as pending - user can retry verification
+        
+        # Final fresh query to return the integration
+        result = await db.execute(
+            select(Integration)
+            .where(Integration.id == integration_id)
+        )
+        final_integration = result.scalar_one()
+        
+        return final_integration
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions
+        raise
     except Exception as e:
-        logger.error("Failed to verify integration", error=str(e))
-        # Keep as pending if verification fails
-    
-    logger.info(
-        "Integration connected",
-        integration_id=str(new_integration.id),
-        project_id=str(project_id),
-        provider=integration_data.provider.value
-    )
-    
-    return new_integration
+        logger.error("Failed to connect integration", error=str(e), project_id=str(project_id))
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to connect integration: {str(e)}"
+        )
+
+
+@router.post("/{project_id}/test-data")
+async def test_integration_data(
+    project_id: UUID,
+    integration_data: IntegrationConnect,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Test endpoint to see what data is being received.
+    """
+    return {
+        "received_provider": integration_data.provider.value,
+        "received_config": integration_data.config,
+        "config_keys": list(integration_data.config.keys()) if integration_data.config else [],
+        "has_api_key": "api_key" in integration_data.config if integration_data.config else False,
+        "api_key_length": len(integration_data.config.get("api_key", "")) if integration_data.config else 0,
+        "project_id": str(project_id)
+    }
 
 
 @router.get("/{project_id}", response_model=List[IntegrationResponse])

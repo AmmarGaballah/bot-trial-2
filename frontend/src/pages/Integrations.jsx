@@ -300,17 +300,32 @@ export default function Integrations() {
     mutationFn: (data) => integrations.create(currentProject?.id, data),
     onSuccess: (data) => {
       console.log('Integration connected successfully:', data);
-      toast.success('Integration connected successfully!');
-      // Fix: Use the correct query key that matches the useQuery
+      
+      // Show success message based on status
+      if (data.status === 'connected') {
+        toast.success('🎉 Integration connected and verified successfully!');
+      } else if (data.status === 'pending') {
+        toast.success('✅ Integration created! Click "Verify Connection" to complete setup.');
+      } else {
+        toast.success('Integration connected successfully!');
+      }
+      
+      // Refresh data
       queryClient.invalidateQueries(['integrations', currentProject?.id]);
-      // Also manually refetch to ensure immediate update
       refetch();
+      
+      // Reset form
       setShowModal(false);
       setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
       setConnectingProvider(null);
     },
     onError: (error) => {
-      toast.error(error.response?.data?.detail || 'Connection failed');
+      console.error('Connection failed:', error);
+      
+      // Show specific error message
+      const errorMessage = error.response?.data?.detail || error.message || 'Connection failed';
+      toast.error(`❌ ${errorMessage}`);
+      
       setConnectingProvider(null);
     },
   });

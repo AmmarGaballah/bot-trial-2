@@ -251,6 +251,13 @@ export const integrations = {
   debug: async (projectId, integrationId) => {
     return apiRequest(`/api/v1/integrations/${projectId}/${integrationId}/debug`);
   },
+
+  testData: async (projectId, data) => {
+    return apiRequest(`/api/v1/integrations/${projectId}/test-data`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
 };
 
 // AI Assistant API
