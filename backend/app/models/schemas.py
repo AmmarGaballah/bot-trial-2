@@ -137,12 +137,13 @@ class IntegrationUpdate(BaseModel):
 
 
 class IntegrationResponse(BaseModel):
+    """Integration response schema."""
     id: UUID
     project_id: UUID
     provider: str
     status: IntegrationStatus
     config: Dict[str, Any]  # Sensitive data should be masked
-    metadata: Dict[str, Any]
+    extra_data: Dict[str, Any] = {}
     last_sync: Optional[datetime]
     error_message: Optional[str]
     created_at: datetime

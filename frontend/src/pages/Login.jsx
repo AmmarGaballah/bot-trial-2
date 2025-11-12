@@ -73,6 +73,7 @@ export default function Login() {
                   onChange={(e) => setEmail(e.target.value)}
                   placeholder="your@email.com"
                   className="input-glass w-full pl-12"
+                  autoComplete="username"
                   required
                 />
               </div>
