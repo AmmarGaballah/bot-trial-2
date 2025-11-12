@@ -60,7 +60,7 @@ class UserRegister(BaseModel):
 
 
 class UserLogin(BaseModel):
-    email: EmailStr
+    email: str  # Allow any string format for login (including .local domains)
     password: str
 
 
