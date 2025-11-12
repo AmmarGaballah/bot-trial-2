@@ -21,7 +21,7 @@ export default function Products() {
   const { data: productsData, isLoading } = useQuery({
     queryKey: ['products', currentProject?.id],
     queryFn: async () => {
-      const response = await api.get(`/products/${currentProject.id}`);
+      const response = await api.get(`/api/v1/products/${currentProject.id}`);
       return response.data;
     },
     enabled: !!currentProject,
@@ -31,7 +31,7 @@ export default function Products() {
 
   // Create product mutation
   const createMutation = useMutation({
-    mutationFn: (productData) => api.post(`/products/${currentProject.id}`, productData),
+    mutationFn: (productData) => api.post(`/api/v1/products/${currentProject.id}`, productData),
     onSuccess: () => {
       queryClient.invalidateQueries(['products']);
       toast.success('Product created successfully!');
@@ -45,7 +45,7 @@ export default function Products() {
   // Update product mutation
   const updateMutation = useMutation({
     mutationFn: ({ productId, data }) => 
-      api.put(`/products/${currentProject.id}/${productId}`, data),
+      api.put(`/api/v1/products/${currentProject.id}/${productId}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['products']);
       toast.success('Product updated successfully!');
@@ -59,7 +59,7 @@ export default function Products() {
   // Delete product mutation
   const deleteMutation = useMutation({
     mutationFn: (productId) => 
-      api.delete(`/products/${currentProject.id}/${productId}`),
+      api.delete(`/api/v1/products/${currentProject.id}/${productId}`),
     onSuccess: () => {
       queryClient.invalidateQueries(['products']);
       toast.success('Product deleted successfully!');
@@ -74,7 +74,7 @@ export default function Products() {
     mutationFn: (file) => {
       const formData = new FormData();
       formData.append('file', file);
-      return api.post(`/products/${currentProject.id}/bulk-upload`, formData, {
+      return api.post(`/api/v1/products/${currentProject.id}/bulk-upload`, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
     },

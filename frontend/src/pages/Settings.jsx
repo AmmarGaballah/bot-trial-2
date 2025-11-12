@@ -18,7 +18,8 @@ import {
   Plus,
   Trash2,
   Edit2,
-  X
+  X,
+  MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import GlassCard from '../components/GlassCard';
@@ -42,7 +43,7 @@ export default function Settings() {
   const [saved, setSaved] = useState(false);
 
   const updateMutation = useMutation({
-    mutationFn: (data) => projects.update(currentProject?.id, data),
+    mutationFn: (data) => api.projects.update(currentProject?.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['projects']);
       setSaved(true);
@@ -66,6 +67,7 @@ export default function Settings() {
   const tabs = [
     { id: 'general', label: 'General', icon: SettingsIcon },
     { id: 'ai', label: 'AI Settings', icon: Sparkles },
+    { id: 'telegram', label: 'Telegram', icon: MessageSquare },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield }
   ];
@@ -238,6 +240,76 @@ export default function Settings() {
                       <div className="text-center">
                         <p className="text-2xl font-bold text-white">324%</p>
                         <p className="text-xs text-slate-400">ROI</p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeTab === 'telegram' && (
+                <div className="space-y-6">
+                  <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                    <MessageSquare className="w-6 h-6 text-blue-400" />
+                    Telegram Bot Settings
+                  </h2>
+                  
+                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
+                    <h3 className="font-medium text-blue-300 mb-2">Bot Status</h3>
+                    <div className="flex items-center gap-2">
+                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                      <span className="text-sm text-slate-300">Connected & Active</span>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4">
+                    <div className="p-4 bg-white/5 rounded-lg">
+                      <h3 className="font-medium text-white mb-2">Auto-Reply Settings</h3>
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-300">Enable Auto-Reply</span>
+                          <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-purple-500">
+                            <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-6" />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-sm text-slate-300">Response Delay (seconds)</span>
+                          <input 
+                            type="number" 
+                            defaultValue="2" 
+                            className="w-20 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-sm"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="p-4 bg-white/5 rounded-lg">
+                      <h3 className="font-medium text-white mb-2">Welcome Message</h3>
+                      <textarea 
+                        rows={3}
+                        defaultValue="👋 Hello! I'm your AI assistant. How can I help you today?"
+                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm resize-none"
+                      />
+                    </div>
+
+                    <div className="p-4 bg-white/5 rounded-lg">
+                      <h3 className="font-medium text-white mb-2">Bot Commands</h3>
+                      <div className="space-y-2 text-sm">
+                        <div className="flex justify-between">
+                          <code className="text-blue-300">/start</code>
+                          <span className="text-slate-400">Welcome message</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <code className="text-blue-300">/help</code>
+                          <span className="text-slate-400">Show help menu</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <code className="text-blue-300">/products</code>
+                          <span className="text-slate-400">Browse products</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <code className="text-blue-300">/orders</code>
+                          <span className="text-slate-400">Check order status</span>
+                        </div>
                       </div>
                     </div>
                   </div>

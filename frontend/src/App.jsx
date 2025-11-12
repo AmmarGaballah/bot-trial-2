@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { ErrorBoundary } from 'react-error-boundary';
 import { Toaster } from 'sonner';
 import { Plus } from 'lucide-react';
+import ErrorFallback from './components/ErrorBoundary';
+import { PageLoader } from './components/LoadingSpinner';
 import { useAuthStore } from './store/authStore';
 import { useProjectStore } from './store/projectStore';
 import CreateProjectModal from './components/CreateProjectModal';
@@ -48,11 +51,7 @@ function ProtectedRoute({ children }) {
   }
 
   if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-12 h-12 border-4 border-accent-500 border-t-transparent rounded-full" />
-      </div>
-    );
+    return <PageLoader text="Authenticating..." />;
   }
 
   if (!isAuthenticated) {
@@ -121,28 +120,32 @@ function App() {
           <Route
             path="/*"
             element={
-              <ProtectedRoute>
-                <MainLayout>
-                  <Routes>
-                    <Route path="/" element={<Dashboard />} />
-                    <Route path="/assistant" element={<Assistant />} />
-                    <Route path="/integrations" element={<Integrations />} />
-                    <Route path="/integrations/manage" element={<IntegrationsManagement />} />
-                    <Route path="/orders" element={<Orders />} />
-                    <Route path="/order-tracking" element={<OrderTracking />} />
-                    <Route path="/messages" element={<Messages />} />
-                    <Route path="/inbox" element={<Messages />} />
-                    <Route path="/products" element={<Products />} />
-                    <Route path="/bot-training" element={<BotTraining />} />
-                    <Route path="/social-media" element={<SocialMedia />} />
-                    <Route path="/reports" element={<Reports />} />
-                    <Route path="/subscription" element={<Subscription />} />
-                    <Route path="/usage" element={<UsageDashboard />} />
-                    <Route path="/settings" element={<Settings />} />
-                    <Route path="/about" element={<About />} />
-                  </Routes>
-                </MainLayout>
-              </ProtectedRoute>
+              <ErrorBoundary FallbackComponent={ErrorFallback}>
+                <ProtectedRoute>
+                  <MainLayout>
+                    <ErrorBoundary FallbackComponent={ErrorFallback}>
+                      <Routes>
+                        <Route path="/" element={<Dashboard />} />
+                        <Route path="/assistant" element={<Assistant />} />
+                        <Route path="/integrations" element={<Integrations />} />
+                        <Route path="/integrations/manage" element={<IntegrationsManagement />} />
+                        <Route path="/orders" element={<Orders />} />
+                        <Route path="/order-tracking" element={<OrderTracking />} />
+                        <Route path="/messages" element={<Messages />} />
+                        <Route path="/inbox" element={<Messages />} />
+                        <Route path="/products" element={<Products />} />
+                        <Route path="/bot-training" element={<BotTraining />} />
+                        <Route path="/social-media" element={<SocialMedia />} />
+                        <Route path="/reports" element={<Reports />} />
+                        <Route path="/subscription" element={<Subscription />} />
+                        <Route path="/usage" element={<UsageDashboard />} />
+                        <Route path="/settings" element={<Settings />} />
+                        <Route path="/about" element={<About />} />
+                      </Routes>
+                    </ErrorBoundary>
+                  </MainLayout>
+                </ProtectedRoute>
+              </ErrorBoundary>
             }
           />
         </Routes>

@@ -412,8 +412,32 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
             # Create Telegram service
             telegram_service = TelegramService(bot_token)
             
-            # Simple echo response for testing
-            response_text = f"🤖 Hello! You said: '{message.content}'\n\nI'm your AI assistant. How can I help you today?"
+            # Generate AI response
+            try:
+                from app.services.gemini_client import GeminiClient
+                gemini = GeminiClient()
+                
+                # Build context for AI
+                context = f"""You are a helpful AI sales assistant for a business. 
+                Customer message: {message.content}
+                
+                Please provide a helpful, friendly response. Keep it concise and professional.
+                If they're asking about products, orders, or need help, offer assistance.
+                """
+                
+                ai_response = await gemini.generate_response(
+                    prompt=context,
+                    use_functions=False,
+                    max_tokens=200,
+                    temperature=0.7
+                )
+                
+                response_text = ai_response.get("text", "Hello! I'm your AI assistant. How can I help you today?")
+                
+            except Exception as e:
+                logger.error("Failed to generate AI response", error=str(e))
+                # Fallback to simple response
+                response_text = f"🤖 Hello! I'm your AI sales assistant. How can I help you today?\n\nYou said: '{message.content}'"
             
             # Send response
             await telegram_service.send_message(

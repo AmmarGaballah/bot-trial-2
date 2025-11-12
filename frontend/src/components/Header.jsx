@@ -19,18 +19,16 @@ export default function Header() {
   const { data: projectsData } = useQuery({
     queryKey: ['projects'],
     queryFn: async () => {
-      const response = await api.get('/projects');
-      return response.data;
+      return await api.projects.list();
     },
   });
 
-  const projects = projectsData?.projects || [];
+  const projects = projectsData || [];
 
   // Create project mutation
   const createProjectMutation = useMutation({
     mutationFn: async (name) => {
-      const response = await api.post('/projects', { name, description: '' });
-      return response.data;
+      return await api.projects.create({ name, description: '', timezone: 'UTC' });
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries(['projects']);
