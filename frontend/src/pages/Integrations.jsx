@@ -329,6 +329,25 @@ export default function Integrations() {
     },
   });
 
+  // Verify mutation
+  const verifyMutation = useMutation({
+    mutationFn: ({ projectId, integrationId }) => 
+      integrations.verify(projectId, integrationId),
+    onSuccess: (data) => {
+      if (data.status === 'success') {
+        toast.success('Integration verified successfully!');
+      } else {
+        toast.error(data.message || 'Verification failed');
+      }
+      // Refresh integrations list
+      queryClient.invalidateQueries(['integrations', currentProject?.id]);
+      refetch();
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Verification failed');
+    },
+  });
+
   const getIntegrationStatus = (provider) => {
     // Handle both direct array and nested data structure
     const integrations = connectedIntegrations?.data || connectedIntegrations || [];
@@ -351,6 +370,8 @@ export default function Integrations() {
     switch (status) {
       case 'connected':
         return 'bg-green-500/20 text-green-400 border border-green-500/30';
+      case 'pending':
+        return 'bg-yellow-500/20 text-yellow-400 border border-yellow-500/30';
       case 'error':
         return 'bg-red-500/20 text-red-400 border border-red-500/30';
       case 'syncing':
@@ -391,6 +412,16 @@ export default function Integrations() {
     if (!integrationId || !currentProject) return;
 
     syncMutation.mutate({
+      projectId: currentProject.id,
+      integrationId: integrationId,
+    });
+  };
+
+  const handleVerify = (provider) => {
+    const integrationId = getIntegrationId(provider);
+    if (!integrationId || !currentProject) return;
+
+    verifyMutation.mutate({
       projectId: currentProject.id,
       integrationId: integrationId,
     });
@@ -477,6 +508,7 @@ export default function Integrations() {
         {availableIntegrations.map((integration, index) => {
           const status = getIntegrationStatus(integration.id);
           const isConnected = status === 'connected';
+          const isPending = status === 'pending';
           const isError = status === 'error';
           const isConnecting = connectingProvider === integration.id;
 
@@ -524,6 +556,26 @@ export default function Integrations() {
                         <SettingsIcon className="w-4 h-4" />
                       </motion.button>
                     </>
+                  ) : isPending ? (
+                    <motion.button
+                      whileHover={{ scale: 1.05 }}
+                      whileTap={{ scale: 0.95 }}
+                      onClick={() => handleVerify(integration.id)}
+                      disabled={verifyMutation.isPending}
+                      className="w-full btn-neon disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      {verifyMutation.isPending ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin inline mr-2" />
+                          Verifying...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle className="w-4 h-4 inline mr-2" />
+                          Verify Connection
+                        </>
+                      )}
+                    </motion.button>
                   ) : (
                     <motion.button
                       whileHover={{ scale: 1.05 }}

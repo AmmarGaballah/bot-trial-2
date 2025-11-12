@@ -29,6 +29,7 @@ class Settings(BaseSettings):
     # Server
     HOST: str = "0.0.0.0"
     PORT: int = 8000
+    API_BASE_URL: str = "https://ai-sales-bot-api-production-412b.up.railway.app"
     
     # Security
     SECRET_KEY: str = Field(default="", min_length=0)

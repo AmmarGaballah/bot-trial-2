@@ -241,6 +241,12 @@ export const integrations = {
       method: 'POST',
     });
   },
+
+  verify: async (projectId, integrationId) => {
+    return apiRequest(`/api/v1/integrations/${projectId}/${integrationId}/verify`, {
+      method: 'POST',
+    });
+  },
 };
 
 // AI Assistant API

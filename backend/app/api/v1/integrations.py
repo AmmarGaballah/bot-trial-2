@@ -75,6 +75,12 @@ async def connect_integration(
         await db.commit()
         await db.refresh(existing)
         
+        try:
+            await _verify_and_setup_integration(existing, db)
+        except Exception as e:
+            logger.error("Failed to verify integration", error=str(e))
+            # Keep as pending if verification fails
+        
         logger.info(
             "Integration updated",
             integration_id=str(existing.id),
@@ -96,8 +102,12 @@ async def connect_integration(
     await db.commit()
     await db.refresh(new_integration)
     
-    # TODO: Trigger async task to verify connection
-    # e.g., celery_app.send_task('verify_integration', args=[str(new_integration.id)])
+    # Verify connection and setup webhook
+    try:
+        await _verify_and_setup_integration(new_integration, db)
+    except Exception as e:
+        logger.error("Failed to verify integration", error=str(e))
+        # Keep as pending if verification fails
     
     logger.info(
         "Integration connected",
@@ -308,6 +318,49 @@ async def sync_integration(
     }
 
 
+@router.post("/{project_id}/{integration_id}/verify")
+async def verify_integration(
+    project_id: UUID,
+    integration_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Manually verify and setup integration.
+    """
+    # Verify project access
+    await verify_project_access(project_id, user_id, db)
+    
+    # Get integration
+    result = await db.execute(
+        select(Integration)
+        .where(Integration.id == integration_id)
+        .where(Integration.project_id == project_id)
+    )
+    integration = result.scalar_one_or_none()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Integration not found"
+        )
+    
+    try:
+        await _verify_and_setup_integration(integration, db)
+        return {
+            "status": "success",
+            "message": f"{integration.provider} integration verified successfully",
+            "integration_status": integration.status.value
+        }
+    except Exception as e:
+        logger.error("Manual verification failed", error=str(e))
+        return {
+            "status": "error", 
+            "message": str(e),
+            "integration_status": integration.status.value
+        }
+
+
 def _mask_sensitive_config(config: dict, provider: str) -> dict:
     """Mask sensitive configuration values."""
     if not config or not isinstance(config, dict):
@@ -328,3 +381,74 @@ def _mask_sensitive_config(config: dict, provider: str) -> dict:
                 masked[key] = "***"
     
     return masked
+
+
+async def _verify_and_setup_integration(integration: Integration, db: AsyncSession):
+    """Verify integration connection and setup webhooks."""
+    if integration.provider == "telegram":
+        await _setup_telegram_integration(integration, db)
+    elif integration.provider == "whatsapp":
+        await _setup_whatsapp_integration(integration, db)
+    # Add other providers as needed
+
+
+async def _setup_telegram_integration(integration: Integration, db: AsyncSession):
+    """Setup Telegram bot webhook and verify connection."""
+    import httpx
+    from app.core.config import settings
+    
+    bot_token = integration.config.get("api_key")
+    if not bot_token:
+        raise ValueError("Telegram bot token is required")
+    
+    # Verify bot token by getting bot info
+    async with httpx.AsyncClient() as client:
+        try:
+            # Test bot token
+            response = await client.get(f"https://api.telegram.org/bot{bot_token}/getMe")
+            response.raise_for_status()
+            bot_info = response.json()
+            
+            if not bot_info.get("ok"):
+                raise ValueError("Invalid Telegram bot token")
+            
+            # Setup webhook
+            webhook_url = f"{settings.API_BASE_URL}/api/v1/webhooks/telegram/{integration.project_id}"
+            webhook_response = await client.post(
+                f"https://api.telegram.org/bot{bot_token}/setWebhook",
+                json={"url": webhook_url}
+            )
+            webhook_response.raise_for_status()
+            webhook_result = webhook_response.json()
+            
+            if webhook_result.get("ok"):
+                # Update integration status to connected
+                integration.status = IntegrationStatus.CONNECTED
+                integration.extra_data = {
+                    "bot_info": bot_info.get("result", {}),
+                    "webhook_url": webhook_url
+                }
+                await db.commit()
+                
+                logger.info(
+                    "Telegram integration verified and webhook set",
+                    integration_id=str(integration.id),
+                    bot_username=bot_info.get("result", {}).get("username")
+                )
+            else:
+                raise ValueError("Failed to set Telegram webhook")
+                
+        except httpx.HTTPError as e:
+            logger.error("HTTP error verifying Telegram bot", error=str(e))
+            raise ValueError(f"Failed to verify Telegram bot: {str(e)}")
+        except Exception as e:
+            logger.error("Error setting up Telegram integration", error=str(e))
+            raise
+
+
+async def _setup_whatsapp_integration(integration: Integration, db: AsyncSession):
+    """Setup WhatsApp integration (placeholder)."""
+    # For now, just mark as connected
+    # TODO: Implement WhatsApp Business API verification
+    integration.status = IntegrationStatus.CONNECTED
+    await db.commit()
