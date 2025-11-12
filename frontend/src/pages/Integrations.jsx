@@ -395,15 +395,31 @@ export default function Integrations() {
 
     setConnectingProvider(selectedProvider.id);
     
-    const configData = {
-      api_key: credentials.apiKey,
-      api_secret: credentials.apiSecret,
-      webhook_url: credentials.webhookUrl,
-    };
+    // Build config data, only include non-empty values
+    const configData = {};
+    
+    if (credentials.apiKey && credentials.apiKey.trim()) {
+      configData.api_key = credentials.apiKey.trim();
+    }
+    
+    if (credentials.apiSecret && credentials.apiSecret.trim()) {
+      configData.api_secret = credentials.apiSecret.trim();
+    }
+    
+    if (credentials.webhookUrl && credentials.webhookUrl.trim()) {
+      configData.webhook_url = credentials.webhookUrl.trim();
+    }
     
     // Add shop domain for Shopify
-    if (selectedProvider.id === 'shopify' && credentials.shopDomain) {
-      configData.shop_domain = credentials.shopDomain;
+    if (selectedProvider.id === 'shopify' && credentials.shopDomain && credentials.shopDomain.trim()) {
+      configData.shop_domain = credentials.shopDomain.trim();
+    }
+    
+    // Ensure we have the required api_key
+    if (!configData.api_key) {
+      toast.error('API Key cannot be empty');
+      setConnectingProvider(null);
+      return;
     }
     
     const requestData = {
@@ -415,6 +431,7 @@ export default function Integrations() {
     };
     
     console.log('Connecting integration with data:', requestData);
+    console.log('API Key length:', configData.api_key ? configData.api_key.length : 0);
     
     connectMutation.mutate(requestData);
   };

@@ -58,6 +58,13 @@ async def connect_integration(
     # Verify project access
     await verify_project_access(project_id, user_id, db)
     
+    logger.info(
+        "Connecting integration",
+        provider=integration_data.provider.value,
+        config_keys=list(integration_data.config.keys()) if integration_data.config else [],
+        project_id=str(project_id)
+    )
+    
     # Check if integration already exists
     result = await db.execute(
         select(Integration)
