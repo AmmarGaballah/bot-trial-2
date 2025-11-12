@@ -118,21 +118,30 @@ async def list_integrations(
     """
     List all integrations for a project.
     """
-    # Verify project access
-    await verify_project_access(project_id, user_id, db)
-    
-    result = await db.execute(
-        select(Integration)
-        .where(Integration.project_id == project_id)
-        .order_by(Integration.created_at.desc())
-    )
-    integrations = result.scalars().all()
-    
-    # Mask sensitive config data
-    for integration in integrations:
-        integration.config = _mask_sensitive_config(integration.config, integration.provider)
-    
-    return integrations
+    try:
+        # Verify project access
+        await verify_project_access(project_id, user_id, db)
+        
+        result = await db.execute(
+            select(Integration)
+            .where(Integration.project_id == project_id)
+            .order_by(Integration.created_at.desc())
+        )
+        integrations = result.scalars().all()
+        
+        # Mask sensitive config data
+        for integration in integrations:
+            integration.config = _mask_sensitive_config(integration.config, integration.provider)
+        
+        return integrations
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like access denied)
+        raise
+    except Exception as e:
+        logger.error("Failed to list integrations", error=str(e), project_id=str(project_id))
+        # Return empty list instead of crashing
+        return []
 
 
 @router.get("/{project_id}/{integration_id}", response_model=IntegrationResponse)
@@ -301,6 +310,9 @@ async def sync_integration(
 
 def _mask_sensitive_config(config: dict, provider: str) -> dict:
     """Mask sensitive configuration values."""
+    if not config or not isinstance(config, dict):
+        return {}
+        
     masked = config.copy()
     sensitive_keys = [
         'api_key', 'api_secret', 'access_token', 
