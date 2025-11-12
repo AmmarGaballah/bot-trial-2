@@ -281,7 +281,7 @@ export default function Integrations() {
   const [connectingProvider, setConnectingProvider] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState(null);
-  const [credentials, setCredentials] = useState({ apiKey: '', apiSecret: '', webhookUrl: '' });
+  const [credentials, setCredentials] = useState({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
   const [showInstructions, setShowInstructions] = useState(false);
   const [selectedInstructions, setSelectedInstructions] = useState(null);
 
@@ -306,7 +306,7 @@ export default function Integrations() {
       // Also manually refetch to ensure immediate update
       refetch();
       setShowModal(false);
-      setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '' });
+      setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
       setConnectingProvider(null);
     },
     onError: (error) => {
@@ -394,13 +394,21 @@ export default function Integrations() {
     }
 
     setConnectingProvider(selectedProvider.id);
+    
+    const configData = {
+      api_key: credentials.apiKey,
+      api_secret: credentials.apiSecret,
+      webhook_url: credentials.webhookUrl,
+    };
+    
+    // Add shop domain for Shopify
+    if (selectedProvider.id === 'shopify' && credentials.shopDomain) {
+      configData.shop_domain = credentials.shopDomain;
+    }
+    
     connectMutation.mutate({
       provider: selectedProvider.id,
-      credentials: {
-        api_key: credentials.apiKey,
-        api_secret: credentials.apiSecret,
-        webhook_url: credentials.webhookUrl,
-      },
+      credentials: configData,
       config: {
         auto_sync: true,
       }
@@ -634,20 +642,60 @@ export default function Integrations() {
 
       {/* Info Box */}
       <GlassCard className="p-6">
-        <h3 className="text-lg font-semibold mb-3">📚 Integration Guide</h3>
-        <div className="space-y-2 text-sm text-gray-400">
-          <p>
-            <strong className="text-gray-200">Shopify:</strong> Requires API key and secret from your Shopify admin panel
-          </p>
-          <p>
-            <strong className="text-gray-200">WhatsApp:</strong> Need WhatsApp Business API access token
-          </p>
-          <p>
-            <strong className="text-gray-200">Telegram:</strong> Create a bot with @BotFather and get your bot token
-          </p>
-          <p className="mt-4 text-accent-400">
-            💡 Tip: Each integration requires specific credentials. Check our documentation for detailed setup instructions.
-          </p>
+        <h3 className="text-lg font-semibold mb-4">📚 Integration Setup Guide</h3>
+        <div className="space-y-4 text-sm text-gray-400">
+          
+          {/* Telegram Instructions */}
+          <div className="border-l-2 border-blue-500 pl-4">
+            <p className="text-blue-400 font-semibold mb-2">🤖 Telegram Bot Setup:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              <li>Open Telegram and search for <strong className="text-gray-200">@BotFather</strong></li>
+              <li>Send <code className="bg-gray-800 px-1 rounded">/newbot</code> command</li>
+              <li>Choose a name (e.g., "My Sales Bot")</li>
+              <li>Choose username ending in "bot" (e.g., "mysales_bot")</li>
+              <li>Copy the <strong className="text-gray-200">bot token</strong> and paste in API Key field</li>
+            </ol>
+          </div>
+
+          {/* Shopify Instructions */}
+          <div className="border-l-2 border-green-500 pl-4">
+            <p className="text-green-400 font-semibold mb-2">🛍️ Shopify Setup:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              <li>Go to Shopify Admin → Apps → App and sales channel settings</li>
+              <li>Click "Develop apps" → "Create an app"</li>
+              <li>Configure API scopes (read_orders, read_products, etc.)</li>
+              <li>Install app and copy <strong className="text-gray-200">API key & secret</strong></li>
+            </ol>
+          </div>
+
+          {/* WhatsApp Instructions */}
+          <div className="border-l-2 border-green-600 pl-4">
+            <p className="text-green-400 font-semibold mb-2">📱 WhatsApp Business API:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              <li>Apply for WhatsApp Business API access</li>
+              <li>Get approved by Meta/Facebook</li>
+              <li>Obtain <strong className="text-gray-200">access token</strong> from Business Manager</li>
+              <li>Configure webhook URL in Meta Developer Console</li>
+            </ol>
+          </div>
+
+          {/* Instagram Instructions */}
+          <div className="border-l-2 border-pink-500 pl-4">
+            <p className="text-pink-400 font-semibold mb-2">📸 Instagram Business:</p>
+            <ol className="list-decimal list-inside space-y-1 ml-2">
+              <li>Convert to Instagram Business Account</li>
+              <li>Connect to Facebook Page</li>
+              <li>Get <strong className="text-gray-200">access token</strong> from Facebook Developer</li>
+              <li>Enable Instagram Basic Display API</li>
+            </ol>
+          </div>
+
+          <div className="mt-4 p-3 bg-accent-500/10 border border-accent-500/30 rounded-lg">
+            <p className="text-accent-400 text-xs">
+              💡 <strong>Pro Tip:</strong> Start with Telegram - it's the easiest to set up and test! 
+              Your AI bot will respond to messages automatically once connected.
+            </p>
+          </div>
         </div>
       </GlassCard>
 
@@ -669,49 +717,103 @@ export default function Integrations() {
               </div>
             </div>
 
+            {/* Provider-specific instructions */}
+            {selectedProvider.id === 'telegram' && (
+              <div className="mb-4 p-3 bg-blue-500/10 border border-blue-500/30 rounded-lg">
+                <p className="text-blue-400 text-xs font-semibold mb-1">🤖 Quick Setup:</p>
+                <p className="text-xs text-gray-400">
+                  1. Message @BotFather on Telegram<br/>
+                  2. Send /newbot command<br/>
+                  3. Copy the bot token below
+                </p>
+              </div>
+            )}
+
+            {selectedProvider.id === 'shopify' && (
+              <div className="mb-4 p-3 bg-green-500/10 border border-green-500/30 rounded-lg">
+                <p className="text-green-400 text-xs font-semibold mb-1">🛍️ Shopify Setup:</p>
+                <p className="text-xs text-gray-400">
+                  Get API credentials from Shopify Admin → Apps → Develop apps
+                </p>
+              </div>
+            )}
+
             <form onSubmit={(e) => { e.preventDefault(); handleSubmitConnection(); }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  API Key *
+                  {selectedProvider.id === 'telegram' ? 'Bot Token *' : 
+                   selectedProvider.id === 'shopify' ? 'API Key *' : 
+                   'API Key *'}
                 </label>
                 <input
                   type="text"
                   value={credentials.apiKey}
                   onChange={(e) => setCredentials({ ...credentials, apiKey: e.target.value })}
-                  placeholder="Enter your API key"
+                  placeholder={
+                    selectedProvider.id === 'telegram' ? '1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ' :
+                    selectedProvider.id === 'shopify' ? 'shpat_...' :
+                    'Enter your API key'
+                  }
                   className="input-glass w-full"
                   autoComplete="username"
                   required
                 />
+                {selectedProvider.id === 'telegram' && (
+                  <p className="text-xs text-gray-500 mt-1">
+                    Get this from @BotFather after creating your bot
+                  </p>
+                )}
               </div>
+
+              {selectedProvider.id === 'shopify' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Shop Domain *
+                  </label>
+                  <input
+                    type="text"
+                    value={credentials.shopDomain || ''}
+                    onChange={(e) => setCredentials({ ...credentials, shopDomain: e.target.value })}
+                    placeholder="your-shop-name (without .myshopify.com)"
+                    className="input-glass w-full"
+                    required={selectedProvider.id === 'shopify'}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">
+                    Just the shop name, not the full URL
+                  </p>
+                </div>
+              )}
 
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  API Secret (optional)
+                  {selectedProvider.id === 'shopify' ? 'API Secret *' : 'API Secret (optional)'}
                 </label>
                 <input
                   type="password"
                   value={credentials.apiSecret}
                   onChange={(e) => setCredentials({ ...credentials, apiSecret: e.target.value })}
-                  placeholder="Enter your API secret"
+                  placeholder={selectedProvider.id === 'shopify' ? 'Required for Shopify' : 'Enter your API secret'}
                   className="input-glass w-full"
                   autoComplete="current-password"
+                  required={selectedProvider.id === 'shopify'}
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  Webhook URL (optional)
-                </label>
-                <input
-                  type="url"
-                  value={credentials.webhookUrl}
-                  onChange={(e) => setCredentials({ ...credentials, webhookUrl: e.target.value })}
-                  placeholder="https://your-domain.com/webhook"
-                  className="input-glass w-full"
-                  autoComplete="url"
-                />
-              </div>
+              {selectedProvider.id !== 'shopify' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Webhook URL (optional)
+                  </label>
+                  <input
+                    type="url"
+                    value={credentials.webhookUrl}
+                    onChange={(e) => setCredentials({ ...credentials, webhookUrl: e.target.value })}
+                    placeholder="https://your-domain.com/webhook"
+                    className="input-glass w-full"
+                    autoComplete="url"
+                  />
+                </div>
+              )}
             </form>
 
             <div className="flex gap-3 mt-6">
@@ -720,7 +822,7 @@ export default function Integrations() {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   setShowModal(false);
-                  setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '' });
+                  setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
                 }}
                 disabled={connectMutation.isPending}
                 className="flex-1 glass-card px-4 py-2 rounded-xl hover:bg-white/10 transition-colors"

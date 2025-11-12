@@ -389,7 +389,17 @@ async def _verify_and_setup_integration(integration: Integration, db: AsyncSessi
         await _setup_telegram_integration(integration, db)
     elif integration.provider == "whatsapp":
         await _setup_whatsapp_integration(integration, db)
-    # Add other providers as needed
+    elif integration.provider == "shopify":
+        await _setup_shopify_integration(integration, db)
+    elif integration.provider == "instagram":
+        await _setup_instagram_integration(integration, db)
+    elif integration.provider == "facebook":
+        await _setup_facebook_integration(integration, db)
+    else:
+        # For unsupported providers, just mark as connected for now
+        integration.status = IntegrationStatus.CONNECTED
+        await db.commit()
+        logger.info(f"Integration {integration.provider} marked as connected (no verification implemented)")
 
 
 async def _setup_telegram_integration(integration: Integration, db: AsyncSession):
@@ -447,8 +457,82 @@ async def _setup_telegram_integration(integration: Integration, db: AsyncSession
 
 
 async def _setup_whatsapp_integration(integration: Integration, db: AsyncSession):
-    """Setup WhatsApp integration (placeholder)."""
+    """Setup WhatsApp integration."""
+    access_token = integration.config.get("api_key")
+    if not access_token:
+        raise ValueError("WhatsApp access token is required")
+    
+    # TODO: Verify WhatsApp Business API token
     # For now, just mark as connected
-    # TODO: Implement WhatsApp Business API verification
     integration.status = IntegrationStatus.CONNECTED
+    integration.extra_data = {"setup_method": "manual"}
+    await db.commit()
+
+
+async def _setup_shopify_integration(integration: Integration, db: AsyncSession):
+    """Setup Shopify integration."""
+    import httpx
+    
+    api_key = integration.config.get("api_key")
+    api_secret = integration.config.get("api_secret")
+    shop_domain = integration.config.get("shop_domain", "").replace(".myshopify.com", "")
+    
+    if not api_key:
+        raise ValueError("Shopify API key is required")
+    
+    if not shop_domain:
+        raise ValueError("Shopify shop domain is required")
+    
+    # Verify Shopify API credentials
+    try:
+        async with httpx.AsyncClient() as client:
+            auth = httpx.BasicAuth(api_key, api_secret or "")
+            response = await client.get(
+                f"https://{shop_domain}.myshopify.com/admin/api/2023-10/shop.json",
+                auth=auth
+            )
+            response.raise_for_status()
+            shop_info = response.json()
+            
+            integration.status = IntegrationStatus.CONNECTED
+            integration.extra_data = {
+                "shop_info": shop_info.get("shop", {}),
+                "shop_domain": shop_domain
+            }
+            await db.commit()
+            
+            logger.info(
+                "Shopify integration verified",
+                integration_id=str(integration.id),
+                shop_name=shop_info.get("shop", {}).get("name")
+            )
+            
+    except httpx.HTTPError as e:
+        logger.error("Failed to verify Shopify credentials", error=str(e))
+        raise ValueError(f"Invalid Shopify credentials: {str(e)}")
+
+
+async def _setup_instagram_integration(integration: Integration, db: AsyncSession):
+    """Setup Instagram integration."""
+    access_token = integration.config.get("api_key")
+    if not access_token:
+        raise ValueError("Instagram access token is required")
+    
+    # TODO: Verify Instagram Basic Display API token
+    # For now, just mark as connected
+    integration.status = IntegrationStatus.CONNECTED
+    integration.extra_data = {"setup_method": "manual"}
+    await db.commit()
+
+
+async def _setup_facebook_integration(integration: Integration, db: AsyncSession):
+    """Setup Facebook integration."""
+    access_token = integration.config.get("api_key")
+    if not access_token:
+        raise ValueError("Facebook access token is required")
+    
+    # TODO: Verify Facebook Graph API token
+    # For now, just mark as connected
+    integration.status = IntegrationStatus.CONNECTED
+    integration.extra_data = {"setup_method": "manual"}
     await db.commit()
