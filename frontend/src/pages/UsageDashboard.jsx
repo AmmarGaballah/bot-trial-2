@@ -22,29 +22,20 @@ export default function UsageDashboard() {
   // Fetch current subscription with usage
   const { data: subscription, isLoading } = useQuery({
     queryKey: ['my-subscription'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/my-subscription');
-      return response.data;
-    },
+    queryFn: () => api.subscriptions.getMySubscription(),
   });
 
   // Fetch usage percentages
   const { data: percentages } = useQuery({
     queryKey: ['usage-percentages'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/usage-percentage');
-      return response.data.percentages;
-    },
+    queryFn: () => api.subscriptions.getUsagePercentage(),
     enabled: !!subscription,
   });
 
   // Fetch usage alerts
   const { data: alerts } = useQuery({
     queryKey: ['usage-alerts'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/usage-alerts');
-      return response.data;
-    },
+    queryFn: () => api.subscriptions.getUsageAlerts(),
     enabled: !!subscription,
     refetchInterval: 60000, // Check every minute
   });
@@ -52,10 +43,7 @@ export default function UsageDashboard() {
   // Fetch overages
   const { data: overages } = useQuery({
     queryKey: ['overages'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/overages');
-      return response.data;
-    },
+    queryFn: () => api.subscriptions.getOverages(),
     enabled: !!subscription && subscription.tier !== 'free',
   });
 

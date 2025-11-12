@@ -24,51 +24,53 @@ export default function Subscription() {
   const queryClient = useQueryClient();
 
   // Fetch all plans
-  const { data: plansData } = useQuery({
+  const { data: plansData, isLoading: plansLoading, error: plansError } = useQuery({
     queryKey: ['subscription-plans'],
     queryFn: async () => {
-      const response = await api.get('/subscriptions/plans');
-      return response.data;
+      console.log('Fetching subscription plans...');
+      const result = await api.subscriptions.getPlans();
+      console.log('Plans data received:', result);
+      return result;
     },
+    retry: 3,
+    onError: (error) => {
+      console.error('Failed to fetch plans:', error);
+      toast.error('Failed to load subscription plans');
+    }
   });
 
   // Fetch my subscription
-  const { data: mySubscription, isLoading } = useQuery({
+  const { data: mySubscription, isLoading, error: subscriptionError } = useQuery({
     queryKey: ['my-subscription'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/my-subscription');
-      return response.data;
-    },
+    queryFn: () => api.subscriptions.getMySubscription(),
+    retry: 3,
+    onError: (error) => {
+      console.error('Failed to fetch subscription:', error);
+      toast.error('Failed to load your subscription');
+    }
   });
 
   // Fetch usage percentages
   const { data: percentages } = useQuery({
     queryKey: ['usage-percentages'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/usage-percentage');
-      return response.data.percentages;
-    },
+    queryFn: () => api.subscriptions.getUsagePercentage(),
     enabled: !!mySubscription,
   });
 
   // Fetch usage alerts
   const { data: alerts } = useQuery({
     queryKey: ['usage-alerts'],
-    queryFn: async () => {
-      const response = await api.get('/subscriptions/usage-alerts');
-      return response.data;
-    },
+    queryFn: () => api.subscriptions.getUsageAlerts(),
     enabled: !!mySubscription,
   });
 
   // Upgrade mutation
   const upgradeMutation = useMutation({
     mutationFn: async ({ tier }) => {
-      const response = await api.post('/subscriptions/upgrade', {
+      return api.subscriptions.upgrade({
         tier,
         billing_cycle: billingCycle,
       });
-      return response.data;
     },
     onSuccess: (data) => {
       toast.success(data.message || 'Subscription upgraded successfully! 🎉');
@@ -119,6 +121,36 @@ export default function Subscription() {
   const isCurrentTier = (tier) => {
     return mySubscription?.tier === tier;
   };
+
+  // Show loading state
+  if (plansLoading || isLoading) {
+    return (
+      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+        <div className="text-white text-xl">Loading subscription plans...</div>
+      </div>
+    );
+  }
+
+  // Show error state
+  if (plansError || subscriptionError) {
+    return (
+      <div className="min-h-screen bg-dark-950 flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 text-red-400 mx-auto mb-4" />
+          <h2 className="text-2xl font-bold text-white mb-2">Failed to Load</h2>
+          <p className="text-gray-400 mb-4">
+            {plansError?.message || subscriptionError?.message || 'Unable to load subscription data'}
+          </p>
+          <button 
+            onClick={() => window.location.reload()} 
+            className="px-6 py-3 bg-accent-500 hover:bg-accent-600 text-white font-semibold rounded-lg transition-colors"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-dark-950 p-6">
