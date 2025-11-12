@@ -1,8 +1,11 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
+import { Plus } from 'lucide-react';
 import { useAuthStore } from './store/authStore';
+import { useProjectStore } from './store/projectStore';
+import CreateProjectModal from './components/CreateProjectModal';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
 import Dashboard from './pages/Dashboard';
@@ -62,6 +65,8 @@ function ProtectedRoute({ children }) {
 // Main Layout
 function MainLayout({ children }) {
   const testingMode = import.meta.env.VITE_TESTING_MODE === 'true';
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const { currentProject, projects } = useProjectStore();
   
   return (
     <div className="flex min-h-screen bg-dark-950">
@@ -76,7 +81,24 @@ function MainLayout({ children }) {
         <main className="flex-1 overflow-auto">
           {children}
         </main>
+        
+        {/* Floating Action Button for Project Creation */}
+        {(!currentProject || projects.length === 0) && (
+          <button
+            onClick={() => setShowCreateProject(true)}
+            className="fixed bottom-6 right-6 w-14 h-14 bg-gradient-to-r from-accent-500 to-accent-600 hover:from-accent-600 hover:to-accent-700 text-white rounded-full shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center z-40 group"
+            title="Create New Project"
+          >
+            <Plus className="w-6 h-6 group-hover:scale-110 transition-transform" />
+          </button>
+        )}
       </div>
+      
+      {/* Create Project Modal */}
+      <CreateProjectModal 
+        isOpen={showCreateProject} 
+        onClose={() => setShowCreateProject(false)} 
+      />
     </div>
   );
 }

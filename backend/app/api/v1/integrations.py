@@ -6,7 +6,7 @@ from typing import List, Any
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 import structlog
 
 from app.core.database import get_db
@@ -67,12 +67,24 @@ async def connect_integration(
     existing = result.scalar_one_or_none()
     
     if existing:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"{integration_data.provider.value} integration already exists for this project"
+        # Update existing integration instead of failing
+        existing.config = integration_data.config
+        existing.status = IntegrationStatus.PENDING
+        existing.updated_at = func.now()
+        
+        await db.commit()
+        await db.refresh(existing)
+        
+        logger.info(
+            "Integration updated",
+            integration_id=str(existing.id),
+            provider=integration_data.provider.value,
+            project_id=str(project_id)
         )
+        
+        return existing
     
-    # Create integration
+    # Create new integration
     new_integration = Integration(
         project_id=project_id,
         provider=integration_data.provider.value,

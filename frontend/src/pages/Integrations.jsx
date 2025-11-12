@@ -605,7 +605,7 @@ export default function Integrations() {
               </div>
             </div>
 
-            <div className="space-y-4">
+            <form onSubmit={(e) => { e.preventDefault(); handleSubmitConnection(); }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
                   API Key *
@@ -616,6 +616,8 @@ export default function Integrations() {
                   onChange={(e) => setCredentials({ ...credentials, apiKey: e.target.value })}
                   placeholder="Enter your API key"
                   className="input-glass w-full"
+                  autoComplete="username"
+                  required
                 />
               </div>
 
@@ -629,6 +631,7 @@ export default function Integrations() {
                   onChange={(e) => setCredentials({ ...credentials, apiSecret: e.target.value })}
                   placeholder="Enter your API secret"
                   className="input-glass w-full"
+                  autoComplete="current-password"
                 />
               </div>
 
@@ -642,9 +645,10 @@ export default function Integrations() {
                   onChange={(e) => setCredentials({ ...credentials, webhookUrl: e.target.value })}
                   placeholder="https://your-domain.com/webhook"
                   className="input-glass w-full"
+                  autoComplete="url"
                 />
               </div>
-            </div>
+            </form>
 
             <div className="flex gap-3 mt-6">
               <motion.button

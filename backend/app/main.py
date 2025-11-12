@@ -90,7 +90,13 @@ setup_error_handlers(app)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.is_development else settings.CORS_ORIGINS + ["https://bot-trial-2.vercel.app"],
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000", 
+        "http://localhost:5173",
+        "https://bot-trial-2.vercel.app",
+        "*"  # Allow all origins for now to fix CORS issues
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

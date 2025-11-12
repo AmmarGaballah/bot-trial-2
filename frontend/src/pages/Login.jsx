@@ -89,6 +89,7 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
                   className="input-glass w-full pl-12 pr-12"
+                  autoComplete="current-password"
                   required
                 />
                 <button
