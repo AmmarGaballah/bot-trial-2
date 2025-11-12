@@ -82,8 +82,15 @@ async def connect_integration(
         await db.commit()
         await db.refresh(existing)
         
+        # Re-fetch the integration to ensure config is properly loaded
+        result = await db.execute(
+            select(Integration)
+            .where(Integration.id == existing.id)
+        )
+        refreshed_integration = result.scalar_one()
+        
         try:
-            await _verify_and_setup_integration(existing, db)
+            await _verify_and_setup_integration(refreshed_integration, db)
         except Exception as e:
             logger.error("Failed to verify integration", error=str(e))
             # Keep as pending if verification fails
@@ -109,9 +116,16 @@ async def connect_integration(
     await db.commit()
     await db.refresh(new_integration)
     
+    # Re-fetch the integration to ensure config is properly loaded
+    result = await db.execute(
+        select(Integration)
+        .where(Integration.id == new_integration.id)
+    )
+    refreshed_integration = result.scalar_one()
+    
     # Verify connection and setup webhook
     try:
-        await _verify_and_setup_integration(new_integration, db)
+        await _verify_and_setup_integration(refreshed_integration, db)
     except Exception as e:
         logger.error("Failed to verify integration", error=str(e))
         # Keep as pending if verification fails
@@ -461,11 +475,28 @@ async def _setup_telegram_integration(integration: Integration, db: AsyncSession
     import httpx
     from app.core.config import settings
     
-    logger.info("Setting up Telegram integration", config_keys=list(integration.config.keys()) if integration.config else [])
+    logger.info(
+        "Setting up Telegram integration", 
+        integration_id=str(integration.id),
+        config_keys=list(integration.config.keys()) if integration.config else [],
+        config_type=type(integration.config).__name__,
+        config_is_none=integration.config is None
+    )
     
-    bot_token = integration.config.get("api_key")
+    # Log the actual config content (with sensitive data masked)
+    if integration.config:
+        masked_config = {k: "***" if "key" in k.lower() or "token" in k.lower() else v 
+                        for k, v in integration.config.items()}
+        logger.info("Config content", masked_config=masked_config)
+    
+    bot_token = integration.config.get("api_key") if integration.config else None
     if not bot_token:
-        logger.error("No bot token found in config", config=integration.config)
+        logger.error(
+            "No bot token found in config", 
+            config=integration.config,
+            config_keys=list(integration.config.keys()) if integration.config else [],
+            api_key_exists="api_key" in integration.config if integration.config else False
+        )
         raise ValueError("Telegram bot token is required")
     
     # Verify bot token by getting bot info
