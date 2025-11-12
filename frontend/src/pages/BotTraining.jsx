@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { motion } from 'framer-motion';
 import { 
   GraduationCap, Plus, Edit2, Trash2, Search, 
-  X, AlertCircle, BookOpen, Zap
+  X, AlertCircle, BookOpen, Zap, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '../services/api';
@@ -19,10 +19,7 @@ export default function BotTraining() {
   // Fetch instructions
   const { data: instructionsData, isLoading } = useQuery({
     queryKey: ['bot-instructions', currentProject?.id],
-    queryFn: async () => {
-      const response = await api.get(`/bot-training/${currentProject.id}/instructions`);
-      return response.data;
-    },
+    queryFn: () => api.botTraining.getInstructions(currentProject.id),
     enabled: !!currentProject,
   });
 
@@ -30,7 +27,7 @@ export default function BotTraining() {
 
   // Create mutation
   const createMutation = useMutation({
-    mutationFn: (data) => api.post(`/bot-training/${currentProject.id}/instructions`, data),
+    mutationFn: (data) => api.botTraining.createInstruction(currentProject.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['bot-instructions']);
       toast.success('Instruction added successfully!');
@@ -44,7 +41,7 @@ export default function BotTraining() {
   // Update mutation
   const updateMutation = useMutation({
     mutationFn: ({ id, data }) => 
-      api.put(`/bot-training/${currentProject.id}/instructions/${id}`, data),
+      api.botTraining.updateInstruction(currentProject.id, id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['bot-instructions']);
       toast.success('Instruction updated successfully!');
@@ -58,13 +55,25 @@ export default function BotTraining() {
   // Delete mutation
   const deleteMutation = useMutation({
     mutationFn: (id) => 
-      api.delete(`/bot-training/${currentProject.id}/instructions/${id}`),
+      api.botTraining.deleteInstruction(currentProject.id, id),
     onSuccess: () => {
       queryClient.invalidateQueries(['bot-instructions']);
       toast.success('Instruction deleted successfully!');
     },
     onError: (error) => {
       toast.error(error.response?.data?.detail || 'Failed to delete instruction');
+    },
+  });
+
+  // Seed instructions mutation
+  const seedMutation = useMutation({
+    mutationFn: () => api.botTraining.seedInstructions(currentProject.id),
+    onSuccess: (data) => {
+      queryClient.invalidateQueries(['bot-instructions']);
+      toast.success(data.message || '🚀 Amazing default instructions created!');
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.detail || 'Failed to seed instructions');
     },
   });
 
@@ -93,15 +102,29 @@ export default function BotTraining() {
           <h1 className="text-4xl font-bold mb-2">Bot Training</h1>
           <p className="text-gray-400">Train your AI assistant with custom instructions</p>
         </div>
-        <motion.button
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.98 }}
-          onClick={() => setShowAddModal(true)}
-          className="btn-neon flex items-center gap-2"
-        >
-          <Plus className="w-5 h-5" />
-          Add Instruction
-        </motion.button>
+        <div className="flex gap-3">
+          {instructions.length === 0 && (
+            <motion.button
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              onClick={() => seedMutation.mutate()}
+              disabled={seedMutation.isLoading}
+              className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white px-6 py-3 rounded-lg font-semibold flex items-center gap-2 transition-all disabled:opacity-50"
+            >
+              <Sparkles className="w-5 h-5" />
+              {seedMutation.isLoading ? 'Creating...' : '🚀 Create Amazing Bot'}
+            </motion.button>
+          )}
+          <motion.button
+            whileHover={{ scale: 1.02 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => setShowAddModal(true)}
+            className="btn-neon flex items-center gap-2"
+          >
+            <Plus className="w-5 h-5" />
+            Add Instruction
+          </motion.button>
+        </div>
       </div>
 
       {/* Info Card */}

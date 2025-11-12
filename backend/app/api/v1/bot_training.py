@@ -11,7 +11,9 @@ import structlog
 
 from app.core.database import get_db
 from app.core.security import get_current_user_id
-from app.db.models import BotInstruction, Project, AutoResponseTemplate
+from app.db.models import Project, BotInstruction
+from app.api.v1.projects import verify_project_access
+from app.core.default_instructions import get_default_instructions
 from pydantic import BaseModel
 
 router = APIRouter()
@@ -336,4 +338,64 @@ async def get_bot_knowledge_base(
         ],
         "total_instructions": len(instructions),
         "total_products": len(products)
+    }
+
+
+@router.post("/{project_id}/seed-instructions")
+async def seed_default_instructions(
+    project_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Seed project with amazing default bot instructions.
+    
+    This will create the BEST AI assistant experience ever!
+    """
+    await verify_project_access(project_id, user_id, db)
+    
+    # Check if instructions already exist
+    result = await db.execute(
+        select(BotInstruction).where(BotInstruction.project_id == project_id)
+    )
+    existing_instructions = result.scalars().all()
+    
+    if existing_instructions:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Project already has instructions. Delete existing ones first or add manually."
+        )
+    
+    # Get default instructions
+    default_instructions = get_default_instructions()
+    
+    # Create instruction records
+    created_instructions = []
+    for inst_data in default_instructions:
+        instruction = BotInstruction(
+            project_id=project_id,
+            title=inst_data["title"],
+            instruction=inst_data["instruction"],
+            category=inst_data["category"],
+            priority=inst_data["priority"],
+            active_for_platforms=inst_data["active_for_platforms"],
+            examples=inst_data["examples"],
+            is_active=True
+        )
+        db.add(instruction)
+        created_instructions.append(instruction)
+    
+    await db.commit()
+    
+    logger.info(
+        "Default instructions seeded",
+        project_id=str(project_id),
+        count=len(created_instructions)
+    )
+    
+    return {
+        "success": True,
+        "message": f"🚀 Amazing! Created {len(created_instructions)} world-class bot instructions!",
+        "instructions_created": len(created_instructions),
+        "categories": list(set(inst["category"] for inst in default_instructions))
     }
