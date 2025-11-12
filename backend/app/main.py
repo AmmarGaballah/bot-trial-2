@@ -3,17 +3,19 @@ Main FastAPI application entry point.
 Configures middleware, routes, and lifecycle events.
 """
 
-from fastapi import FastAPI, Request, status
+from fastapi import FastAPI, Request, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import JSONResponse
 from fastapi.exceptions import RequestValidationError
 from contextlib import asynccontextmanager
+from datetime import datetime
+from sqlalchemy.ext.asyncio import AsyncSession
 import time
 import structlog
 
 from app.core.config import settings
-from app.core.database import init_db, close_db, AsyncSessionLocal
+from app.core.database import init_db, close_db, AsyncSessionLocal, get_db
 from app.core.seed import seed_database
 from app.core.error_handlers import setup_error_handlers
 from app.api.v1 import (
