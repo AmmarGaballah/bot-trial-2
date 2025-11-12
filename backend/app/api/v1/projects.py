@@ -29,21 +29,30 @@ async def create_project(
     
     Projects allow multi-tenant support where each user can manage multiple brands.
     """
-    new_project = Project(
-        owner_id=UUID(user_id),
-        name=project_data.name,
-        description=project_data.description,
-        timezone=project_data.timezone,
-        settings=project_data.settings
-    )
-    
-    db.add(new_project)
-    await db.commit()
-    await db.refresh(new_project)
-    
-    logger.info("Project created", project_id=str(new_project.id), user_id=user_id)
-    
-    return new_project
+    try:
+        new_project = Project(
+            owner_id=UUID(user_id),
+            name=project_data.name,
+            description=project_data.description,
+            timezone=project_data.timezone,
+            settings=project_data.settings or {}
+        )
+        
+        db.add(new_project)
+        await db.commit()
+        await db.refresh(new_project)
+        
+        logger.info("Project created", project_id=str(new_project.id), user_id=user_id)
+        
+        return new_project
+        
+    except Exception as e:
+        logger.error("Failed to create project", error=str(e), user_id=user_id)
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create project: {str(e)}"
+        )
 
 
 @router.get("", response_model=List[ProjectResponse])

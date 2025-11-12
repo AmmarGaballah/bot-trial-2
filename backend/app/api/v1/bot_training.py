@@ -119,29 +119,50 @@ async def create_bot_instruction(
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """Create a new bot instruction."""
-    await verify_project_access(project_id, user_id, db)
-    
-    new_instruction = BotInstruction(
-        project_id=project_id,
-        title=instruction.title,
-        instruction=instruction.instruction,
-        category=instruction.category,
-        priority=instruction.priority,
-        active_for_platforms=instruction.active_for_platforms,
-        active_for_topics=instruction.active_for_topics,
-        examples=instruction.examples,
-    )
-    
-    db.add(new_instruction)
-    await db.commit()
-    await db.refresh(new_instruction)
-    
-    logger.info("Bot instruction created", instruction_id=str(new_instruction.id))
-    
-    return {
-        "id": str(new_instruction.id),
-        "message": "Bot instruction created successfully"
-    }
+    try:
+        await verify_project_access(project_id, user_id, db)
+        
+        new_instruction = BotInstruction(
+            project_id=project_id,
+            title=instruction.title,
+            instruction=instruction.instruction,
+            category=instruction.category,
+            priority=instruction.priority,
+            active_for_platforms=instruction.active_for_platforms or [],
+            active_for_topics=instruction.active_for_topics or [],
+            examples=instruction.examples or [],
+        )
+        
+        db.add(new_instruction)
+        await db.commit()
+        await db.refresh(new_instruction)
+        
+        logger.info("Bot instruction created", instruction_id=str(new_instruction.id))
+        
+        return {
+            "success": True,
+            "message": "Instruction created successfully",
+            "instruction": {
+                "id": str(new_instruction.id),
+                "title": new_instruction.title,
+                "instruction": new_instruction.instruction,
+                "category": new_instruction.category,
+                "priority": new_instruction.priority,
+                "is_active": new_instruction.is_active,
+                "created_at": new_instruction.created_at.isoformat()
+            }
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like access denied)
+        raise
+    except Exception as e:
+        logger.error("Failed to create bot instruction", error=str(e), project_id=str(project_id))
+        await db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to create instruction: {str(e)}"
+        )
 
 
 @router.put("/{project_id}/instructions/{instruction_id}")
@@ -352,50 +373,63 @@ async def seed_default_instructions(
     
     This will create the BEST AI assistant experience ever!
     """
-    await verify_project_access(project_id, user_id, db)
-    
-    # Check if instructions already exist
-    result = await db.execute(
-        select(BotInstruction).where(BotInstruction.project_id == project_id)
-    )
-    existing_instructions = result.scalars().all()
-    
-    if existing_instructions:
+    try:
+        await verify_project_access(project_id, user_id, db)
+        
+        # Check if instructions already exist
+        result = await db.execute(
+            select(BotInstruction).where(BotInstruction.project_id == project_id)
+        )
+        existing_instructions = result.scalars().all()
+        
+        if existing_instructions:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Project already has instructions. Delete existing ones first or add manually."
+            )
+        
+        # Get default instructions
+        default_instructions = get_default_instructions()
+        
+        # Create instruction records
+        created_instructions = []
+        for inst_data in default_instructions:
+            instruction = BotInstruction(
+                project_id=project_id,
+                title=inst_data["title"],
+                instruction=inst_data["instruction"],
+                category=inst_data["category"],
+                priority=inst_data["priority"],
+                active_for_platforms=inst_data["active_for_platforms"],
+                active_for_topics=inst_data.get("active_for_topics", []),
+                examples=inst_data["examples"],
+                is_active=True
+            )
+            db.add(instruction)
+            created_instructions.append(instruction)
+        
+        await db.commit()
+        
+        logger.info(
+            "Default instructions seeded",
+            project_id=str(project_id),
+            count=len(created_instructions)
+        )
+        
+        return {
+            "success": True,
+            "message": f"🚀 Amazing! Created {len(created_instructions)} world-class bot instructions!",
+            "instructions_created": len(created_instructions),
+            "categories": list(set(inst["category"] for inst in default_instructions))
+        }
+        
+    except HTTPException:
+        # Re-raise HTTP exceptions (like access denied or already exists)
+        raise
+    except Exception as e:
+        logger.error("Failed to seed instructions", error=str(e), project_id=str(project_id))
+        await db.rollback()
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Project already has instructions. Delete existing ones first or add manually."
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to seed instructions: {str(e)}"
         )
-    
-    # Get default instructions
-    default_instructions = get_default_instructions()
-    
-    # Create instruction records
-    created_instructions = []
-    for inst_data in default_instructions:
-        instruction = BotInstruction(
-            project_id=project_id,
-            title=inst_data["title"],
-            instruction=inst_data["instruction"],
-            category=inst_data["category"],
-            priority=inst_data["priority"],
-            active_for_platforms=inst_data["active_for_platforms"],
-            examples=inst_data["examples"],
-            is_active=True
-        )
-        db.add(instruction)
-        created_instructions.append(instruction)
-    
-    await db.commit()
-    
-    logger.info(
-        "Default instructions seeded",
-        project_id=str(project_id),
-        count=len(created_instructions)
-    )
-    
-    return {
-        "success": True,
-        "message": f"🚀 Amazing! Created {len(created_instructions)} world-class bot instructions!",
-        "instructions_created": len(created_instructions),
-        "categories": list(set(inst["category"] for inst in default_instructions))
-    }
