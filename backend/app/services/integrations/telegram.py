@@ -191,3 +191,59 @@ class TelegramService:
         return {
             "inline_keyboard": buttons
         }
+
+
+class TelegramClient:
+    """Client wrapper for Telegram integration with AIOrchestrator."""
+    
+    def __init__(self, config: Dict[str, Any]):
+        """Initialize Telegram client with config."""
+        self.config = config
+        self.bot_token = config.get("api_key")
+        if not self.bot_token:
+            raise ValueError("Telegram bot token (api_key) is required")
+        
+        self.service = TelegramService(self.bot_token)
+    
+    async def send_message(self, customer_id: str, message: str) -> Dict[str, Any]:
+        """
+        Send message to customer via Telegram.
+        
+        Args:
+            customer_id: Customer UUID (we need to get their telegram_id)
+            message: Message text to send
+            
+        Returns:
+            Response from Telegram API
+        """
+        # For now, assume customer_id is the telegram chat_id
+        # In a real implementation, we'd look up the customer's telegram_id
+        try:
+            result = await self.service.send_message(
+                chat_id=customer_id,
+                text=message
+            )
+            
+            logger.info(
+                "Message sent via Telegram",
+                customer_id=customer_id,
+                message_id=result.get("result", {}).get("message_id")
+            )
+            
+            return {
+                "status": "sent",
+                "id": result.get("result", {}).get("message_id"),
+                "platform": "telegram"
+            }
+            
+        except Exception as e:
+            logger.error("Failed to send Telegram message", error=str(e))
+            raise
+    
+    async def get_bot_info(self) -> Dict[str, Any]:
+        """Get bot information."""
+        return await self.service.get_me()
+    
+    async def set_webhook(self, webhook_url: str) -> bool:
+        """Set webhook URL."""
+        return await self.service.set_webhook(webhook_url)

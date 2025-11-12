@@ -110,7 +110,8 @@ class AIOrchestrator:
             await self._send_message(
                 customer_id=customer_id,
                 message=ai_response["text_response"],
-                channel=channel
+                channel=channel,
+                project_id=project_id
             )
         
         return {
@@ -182,30 +183,71 @@ class AIOrchestrator:
         self,
         customer_id: UUID,
         message: str,
-        channel: str
+        channel: str,
+        project_id: Optional[UUID] = None
     ) -> Dict[str, Any]:
         """Send message via appropriate integration."""
         client = self.integration_clients.get(channel)
         if not client:
+            logger.error("No integration client found for channel", channel=channel)
             return {"status": "error", "message": f"No client for channel: {channel}"}
         
         try:
-            result = await client.send_message(customer_id, message)
+            # Get customer to find their platform-specific ID
+            from app.db.models import Customer
+            result = await self.db.execute(
+                select(Customer).where(Customer.id == customer_id)
+            )
+            customer = result.scalar_one_or_none()
+            
+            if not customer:
+                logger.error("Customer not found", customer_id=str(customer_id))
+                return {"status": "error", "message": "Customer not found"}
+            
+            # Get platform-specific ID
+            platform_id = None
+            if channel == "telegram":
+                platform_id = customer.telegram_id
+            elif channel == "whatsapp":
+                platform_id = customer.phone
+            elif channel == "instagram":
+                platform_id = customer.instagram_id
+            elif channel == "facebook":
+                platform_id = customer.facebook_id
+            
+            if not platform_id:
+                logger.error("No platform ID found for customer", 
+                           customer_id=str(customer_id), channel=channel)
+                return {"status": "error", "message": f"No {channel} ID for customer"}
+            
+            # Send message via client
+            result = await client.send_message(platform_id, message)
             
             # Save message to database
             new_message = Message(
                 customer_id=customer_id,
+                project_id=project_id or customer.project_id,
                 content=message,
                 direction="outbound",
                 channel=channel,
-                status="sent"
+                status="sent",
+                external_id=result.get("id")
             )
             self.db.add(new_message)
             await self.db.commit()
             
+            logger.info("Message sent successfully", 
+                       customer_id=str(customer_id), 
+                       channel=channel,
+                       message_id=result.get("id"))
+            
             return {"status": "success", "message_id": result.get("id")}
+            
         except Exception as e:
-            logger.error("Failed to send message", error=str(e))
+            logger.error("Failed to send message", 
+                        customer_id=str(customer_id),
+                        channel=channel,
+                        error=str(e))
             return {"status": "error", "message": str(e)}
     
     async def _update_order(

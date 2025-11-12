@@ -125,9 +125,9 @@ async def telegram_webhook(
         await db.commit()
         await db.refresh(new_message)
         
-        # Queue AI processing
+        # Process AI response directly (instead of requiring Celery worker)
         background_tasks.add_task(
-            process_incoming_message.delay,
+            _process_telegram_message_with_ai,
             str(new_message.id),
             str(project_id)
         )
@@ -358,3 +358,90 @@ async def _get_or_create_customer(
         )
     
     return customer
+
+
+async def _process_telegram_message_with_ai(message_id: str, project_id: str):
+    """Process Telegram message with AI and send response."""
+    from app.services.integrations.telegram import TelegramService
+    from app.core.database import get_async_session
+    from app.db.models import Message, Customer, Integration
+    from sqlalchemy import select
+    from uuid import UUID
+    
+    try:
+        async with get_async_session() as db:
+            # Fetch message
+            result = await db.execute(
+                select(Message).where(Message.id == UUID(message_id))
+            )
+            message = result.scalar_one_or_none()
+            
+            if not message:
+                logger.error("Message not found for AI processing", message_id=message_id)
+                return
+            
+            # Get customer
+            result = await db.execute(
+                select(Customer).where(Customer.id == message.customer_id)
+            )
+            customer = result.scalar_one_or_none()
+            
+            if not customer:
+                logger.error("Customer not found", customer_id=str(message.customer_id))
+                return
+            
+            # Get Telegram integration
+            result = await db.execute(
+                select(Integration)
+                .where(Integration.project_id == UUID(project_id))
+                .where(Integration.provider == "telegram")
+                .where(Integration.status == "connected")
+            )
+            integration = result.scalar_one_or_none()
+            
+            if not integration:
+                logger.error("No connected Telegram integration found", project_id=project_id)
+                return
+            
+            # Get bot token
+            bot_token = integration.config.get("api_key")
+            if not bot_token:
+                logger.error("No bot token in integration config")
+                return
+            
+            # Create Telegram service
+            telegram_service = TelegramService(bot_token)
+            
+            # Simple echo response for testing
+            response_text = f"🤖 Hello! You said: '{message.content}'\n\nI'm your AI assistant. How can I help you today?"
+            
+            # Send response
+            await telegram_service.send_message(
+                chat_id=customer.telegram_id,
+                text=response_text
+            )
+            
+            # Save outbound message
+            outbound_message = Message(
+                customer_id=message.customer_id,
+                project_id=UUID(project_id),
+                content=response_text,
+                direction="outbound",
+                channel="telegram",
+                status="sent"
+            )
+            db.add(outbound_message)
+            await db.commit()
+            
+            logger.info(
+                "Telegram echo response sent",
+                message_id=message_id,
+                customer_id=str(message.customer_id)
+            )
+            
+    except Exception as e:
+        logger.error(
+            "Failed to process Telegram message",
+            message_id=message_id,
+            error=str(e)
+        )
