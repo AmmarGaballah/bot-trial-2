@@ -345,20 +345,67 @@ async def verify_integration(
             detail="Integration not found"
         )
     
+    logger.info(
+        "Starting manual verification",
+        integration_id=str(integration_id),
+        provider=integration.provider,
+        config_keys=list(integration.config.keys()) if integration.config else []
+    )
+    
     try:
         await _verify_and_setup_integration(integration, db)
+        logger.info("Manual verification successful", integration_id=str(integration_id))
         return {
             "status": "success",
             "message": f"{integration.provider} integration verified successfully",
             "integration_status": integration.status.value
         }
     except Exception as e:
-        logger.error("Manual verification failed", error=str(e))
+        logger.error("Manual verification failed", error=str(e), integration_id=str(integration_id))
         return {
             "status": "error", 
             "message": str(e),
             "integration_status": integration.status.value
         }
+
+
+@router.get("/{project_id}/{integration_id}/debug")
+async def debug_integration(
+    project_id: UUID,
+    integration_id: UUID,
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """
+    Debug endpoint to check integration data.
+    """
+    # Verify project access
+    await verify_project_access(project_id, user_id, db)
+    
+    # Get integration
+    result = await db.execute(
+        select(Integration)
+        .where(Integration.id == integration_id)
+        .where(Integration.project_id == project_id)
+    )
+    integration = result.scalar_one_or_none()
+    
+    if not integration:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Integration not found"
+        )
+    
+    return {
+        "id": str(integration.id),
+        "provider": integration.provider,
+        "status": integration.status.value,
+        "config_keys": list(integration.config.keys()) if integration.config else [],
+        "config_values": {k: "***" if "key" in k.lower() or "token" in k.lower() or "secret" in k.lower() 
+                         else v for k, v in integration.config.items()} if integration.config else {},
+        "created_at": integration.created_at.isoformat() if integration.created_at else None,
+        "updated_at": integration.updated_at.isoformat() if integration.updated_at else None
+    }
 
 
 def _mask_sensitive_config(config: dict, provider: str) -> dict:

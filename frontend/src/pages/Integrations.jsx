@@ -439,6 +439,20 @@ export default function Integrations() {
     });
   };
 
+  const handleDebug = async (provider) => {
+    const integrationId = getIntegrationId(provider);
+    if (!integrationId || !currentProject) return;
+
+    try {
+      const debugData = await integrations.debug(currentProject.id, integrationId);
+      console.log('Integration debug data:', debugData);
+      toast.info('Debug data logged to console');
+    } catch (error) {
+      console.error('Debug failed:', error);
+      toast.error('Debug failed');
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="p-6 flex items-center justify-center h-96">
@@ -569,25 +583,35 @@ export default function Integrations() {
                       </motion.button>
                     </>
                   ) : isPending ? (
-                    <motion.button
-                      whileHover={{ scale: 1.05 }}
-                      whileTap={{ scale: 0.95 }}
-                      onClick={() => handleVerify(integration.id)}
-                      disabled={verifyMutation.isPending}
-                      className="w-full btn-neon disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      {verifyMutation.isPending ? (
-                        <>
-                          <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin inline mr-2" />
-                          Verifying...
-                        </>
-                      ) : (
-                        <>
-                          <CheckCircle className="w-4 h-4 inline mr-2" />
-                          Verify Connection
-                        </>
-                      )}
-                    </motion.button>
+                    <div className="space-y-2">
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleVerify(integration.id)}
+                        disabled={verifyMutation.isPending}
+                        className="w-full btn-neon disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {verifyMutation.isPending ? (
+                          <>
+                            <div className="w-4 h-4 border-2 border-white/20 border-t-white rounded-full animate-spin inline mr-2" />
+                            Verifying...
+                          </>
+                        ) : (
+                          <>
+                            <CheckCircle className="w-4 h-4 inline mr-2" />
+                            Verify Connection
+                          </>
+                        )}
+                      </motion.button>
+                      <motion.button
+                        whileHover={{ scale: 1.05 }}
+                        whileTap={{ scale: 0.95 }}
+                        onClick={() => handleDebug(integration.id)}
+                        className="w-full glass-card px-3 py-1 rounded-lg hover:bg-white/10 transition-colors text-xs"
+                      >
+                        🐛 Debug Data
+                      </motion.button>
+                    </div>
                   ) : (
                     <motion.button
                       whileHover={{ scale: 1.05 }}
