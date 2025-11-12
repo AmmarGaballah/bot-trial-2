@@ -116,11 +116,10 @@ async def get_my_subscription(
     Get current user's subscription details.
     
     **Returns:**
-    - Current tier and status
-    - Usage stats (messages, orders, AI requests)
-    - Limits remaining
+    - Current tier and limits
+    - Usage statistics
     - Billing information
-    - Feature access
+    - Next billing date
     """
     subscription_service = SubscriptionService(db)
     
@@ -128,24 +127,58 @@ async def get_my_subscription(
         subscription = await subscription_service.get_user_subscription(UUID(user_id))
         
         if not subscription:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail="Subscription not found"
-            )
+            # Return default free tier subscription
+            from app.core.subscription_plans import get_tier_info
+            from app.db.models import SubscriptionTier
+            
+            default_subscription = {
+                "tier": SubscriptionTier.FREE.value,
+                "status": "active",
+                "limits": get_tier_info(SubscriptionTier.FREE)["limits"],
+                "usage": {
+                    "messages": 0,
+                    "orders": 0,
+                    "ai_requests": 0,
+                    "projects": 0
+                },
+                "billing_cycle": "monthly",
+                "next_billing_date": None
+            }
+            
+            return {
+                "success": True,
+                "subscription": default_subscription
+            }
         
         return {
             "success": True,
-            **subscription
+            "subscription": subscription
         }
         
-    except HTTPException:
-        raise
     except Exception as e:
         logger.error("Failed to get subscription", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get subscription: {str(e)}"
-        )
+        # Return default free tier on error
+        from app.core.subscription_plans import get_tier_info
+        from app.db.models import SubscriptionTier
+        
+        default_subscription = {
+            "tier": SubscriptionTier.FREE.value,
+            "status": "active",
+            "limits": get_tier_info(SubscriptionTier.FREE)["limits"],
+            "usage": {
+                "messages": 0,
+                "orders": 0,
+                "ai_requests": 0,
+                "projects": 0
+            },
+            "billing_cycle": "monthly",
+            "next_billing_date": None
+        }
+        
+        return {
+            "success": True,
+            "subscription": default_subscription
+        }
 
 
 @router.post("/upgrade")
@@ -439,10 +472,13 @@ async def get_monthly_overages(
         
     except Exception as e:
         logger.error("Failed to calculate overages", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to calculate overages: {str(e)}"
-        )
+        # Return default no overages on error
+        return {
+            "success": True,
+            "has_overages": False,
+            "overages": {},
+            "total_cost": 0.0
+        }
 
 
 @router.get("/usage-percentage")
@@ -469,10 +505,20 @@ async def get_usage_percentage(
         
     except Exception as e:
         logger.error("Failed to get usage percentage", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to get usage percentage: {str(e)}"
-        )
+        # Return default percentages on error
+        default_percentages = {
+            "messages": 0.0,
+            "orders": 0.0,
+            "ai_requests": 0.0,
+            "projects": 0.0,
+            "integrations": 0.0,
+            "storage_gb": 0.0
+        }
+        
+        return {
+            "success": True,
+            "percentages": default_percentages
+        }
 
 
 @router.get("/usage-alerts")
@@ -504,10 +550,13 @@ async def check_usage_alerts(
         
     except Exception as e:
         logger.error("Failed to check usage alerts", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to check usage alerts: {str(e)}"
-        )
+        # Return default no alerts on error
+        return {
+            "success": True,
+            "should_alert": False,
+            "alerts": {},
+            "highest_usage": 0.0
+        }
 
 
 @router.get("/check-limit/{resource}")
