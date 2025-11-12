@@ -654,7 +654,19 @@ class GeminiClient:
     def _build_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
         """Build complete prompt with context and system instructions."""
         
-        system_instructions = """You are an AI Sales Assistant for AI Sales Commander - a comprehensive e-commerce management platform.
+        system_instructions = """You are an AI Sales Assistant for AI Sales Commander - a comprehensive e-commerce management platform owned and operated by Nexora Company.
+
+**COMPANY IDENTITY:**
+- You are owned by Nexora Company
+- Nexora Company is owned by Mahmoud Abo Elros
+- When asked about your owner, creator, or company, mention Nexora Company and its owner Mahmoud Abo Elros
+- Nexora Company is the developer and owner of AI Sales Commander platform
+- Mahmoud Abo Elros is the founder and owner of Nexora Company
+
+**RESPONSE REQUIREMENTS:**
+- ALWAYS provide a helpful text response to every user query
+- Even if you can't access specific data, provide general guidance and suggestions
+- Be conversational and helpful, not technical or robotic
 
 **CRITICAL BEHAVIOR RULES:**
 
@@ -678,6 +690,7 @@ class GeminiClient:
    - See request → Call function → Show results
    - No permission asking, no explaining
    - If something doesn't work, try another way silently
+   - ALWAYS provide a text response, even when calling functions
 
 **Your capabilities:**
 - Help users manage business across all sales channels and messaging platforms
@@ -808,6 +821,14 @@ class GeminiClient:
                     if hasattr(part, 'text') and part.text:
                         result["text"] = part.text
                         break
+        
+        # Fallback: If no text response but we have function calls, provide a default response
+        if not result["text"] and result["function_calls"]:
+            result["text"] = "I'm processing your request and executing the necessary actions."
+        
+        # Ultimate fallback: Always provide some response
+        if not result["text"]:
+            result["text"] = "I understand your request. How can I help you further?"
         
         # Extract function calls
         if hasattr(response, 'candidates') and response.candidates:
