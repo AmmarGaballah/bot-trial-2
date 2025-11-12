@@ -77,11 +77,12 @@ class RefreshTokenRequest(BaseModel):
 
 class UserResponse(BaseModel):
     id: UUID
-    email: EmailStr
+    email: str  # Allow any email format (including .local domains)
     name: Optional[str]
     role: UserRole
     is_active: bool
     created_at: datetime
+    last_login: Optional[datetime] = None
     
     class Config:
         from_attributes = True

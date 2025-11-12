@@ -90,7 +90,7 @@ setup_error_handlers(app)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"] if settings.is_development else settings.CORS_ORIGINS,
+    allow_origins=["*"] if settings.is_development else settings.CORS_ORIGINS + ["https://bot-trial-2.vercel.app"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
