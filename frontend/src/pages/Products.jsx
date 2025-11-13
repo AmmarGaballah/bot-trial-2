@@ -18,20 +18,17 @@ export default function Products() {
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Fetch products
-  const { data: productsData, isLoading } = useQuery({
+  const { data: products = [], isLoading } = useQuery({
     queryKey: ['products', currentProject?.id],
     queryFn: async () => {
-      const response = await api.get(`/api/v1/products/${currentProject.id}`);
-      return response.data;
+      return await api.products.list(currentProject.id);
     },
     enabled: !!currentProject,
   });
 
-  const products = productsData?.products || [];
-
   // Create product mutation
   const createMutation = useMutation({
-    mutationFn: (productData) => api.post(`/api/v1/products/${currentProject.id}`, productData),
+    mutationFn: (productData) => api.products.create(currentProject.id, productData),
     onSuccess: () => {
       queryClient.invalidateQueries(['products']);
       toast.success('Product created successfully!');
@@ -45,7 +42,7 @@ export default function Products() {
   // Update product mutation
   const updateMutation = useMutation({
     mutationFn: ({ productId, data }) => 
-      api.put(`/api/v1/products/${currentProject.id}/${productId}`, data),
+      api.products.update(currentProject.id, productId, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['products']);
       toast.success('Product updated successfully!');
@@ -59,7 +56,7 @@ export default function Products() {
   // Delete product mutation
   const deleteMutation = useMutation({
     mutationFn: (productId) => 
-      api.delete(`/api/v1/products/${currentProject.id}/${productId}`),
+      api.products.delete(currentProject.id, productId),
     onSuccess: () => {
       queryClient.invalidateQueries(['products']);
       toast.success('Product deleted successfully!');
@@ -71,13 +68,7 @@ export default function Products() {
 
   // Bulk upload mutation
   const uploadMutation = useMutation({
-    mutationFn: (file) => {
-      const formData = new FormData();
-      formData.append('file', file);
-      return api.post(`/api/v1/products/${currentProject.id}/bulk-upload`, formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
-      });
-    },
+    mutationFn: (file) => api.products.bulkUpload(currentProject.id, file),
     onSuccess: (response) => {
       queryClient.invalidateQueries(['products']);
       toast.success(response.data.message);

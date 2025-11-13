@@ -19,7 +19,11 @@ import {
   Trash2,
   Edit2,
   X,
-  MessageSquare
+  MessageSquare,
+  MessageCircle,
+  ShoppingBag,
+  Instagram,
+  RefreshCw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import GlassCard from '../components/GlassCard';
@@ -67,7 +71,7 @@ export default function Settings() {
   const tabs = [
     { id: 'general', label: 'General', icon: SettingsIcon },
     { id: 'ai', label: 'AI Settings', icon: Sparkles },
-    { id: 'telegram', label: 'Telegram', icon: MessageSquare },
+    { id: 'integrations', label: 'Integrations', icon: MessageSquare },
     { id: 'notifications', label: 'Notifications', icon: Bell },
     { id: 'security', label: 'Security', icon: Shield }
   ];
@@ -246,33 +250,41 @@ export default function Settings() {
                 </div>
               )}
 
-              {activeTab === 'telegram' && (
+              {activeTab === 'integrations' && (
                 <div className="space-y-6">
                   <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
-                    <MessageSquare className="w-6 h-6 text-blue-400" />
-                    Telegram Bot Settings
+                    <MessageSquare className="w-6 h-6 text-purple-400" />
+                    Integration Settings
                   </h2>
                   
-                  <div className="p-4 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-                    <h3 className="font-medium text-blue-300 mb-2">Bot Status</h3>
-                    <div className="flex items-center gap-2">
-                      <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                      <span className="text-sm text-slate-300">Connected & Active</span>
+                  {/* Telegram Integration */}
+                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                          <MessageSquare className="w-5 h-5 text-blue-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-white">Telegram Bot</h3>
+                          <p className="text-sm text-slate-400">AI-powered customer communication</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                        <span className="text-sm text-green-400">Connected</span>
+                      </div>
                     </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="p-4 bg-white/5 rounded-lg">
-                      <h3 className="font-medium text-white mb-2">Auto-Reply Settings</h3>
+                    
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-300">Enable Auto-Reply</span>
+                          <span className="text-sm text-slate-300">Auto-Reply</span>
                           <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-purple-500">
                             <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-6" />
                           </button>
                         </div>
                         <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-300">Response Delay (seconds)</span>
+                          <span className="text-sm text-slate-300">Response Delay</span>
                           <input 
                             type="number" 
                             defaultValue="2" 
@@ -280,37 +292,100 @@ export default function Settings() {
                           />
                         </div>
                       </div>
+                      <div>
+                        <label className="block text-sm text-slate-300 mb-2">Welcome Message</label>
+                        <textarea 
+                          rows={2}
+                          defaultValue="👋 Hello! I'm your AI assistant. How can I help you today?"
+                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm resize-none"
+                        />
+                      </div>
                     </div>
-
-                    <div className="p-4 bg-white/5 rounded-lg">
-                      <h3 className="font-medium text-white mb-2">Welcome Message</h3>
-                      <textarea 
-                        rows={3}
-                        defaultValue="👋 Hello! I'm your AI assistant. How can I help you today?"
-                        className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm resize-none"
-                      />
+                    
+                    <div className="flex gap-2">
+                      <button className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2">
+                        <RefreshCw className="w-4 h-4" />
+                        Sync
+                      </button>
+                      <button className="px-4 py-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2">
+                        <SettingsIcon className="w-4 h-4" />
+                        Configure
+                      </button>
                     </div>
+                  </div>
 
-                    <div className="p-4 bg-white/5 rounded-lg">
-                      <h3 className="font-medium text-white mb-2">Bot Commands</h3>
-                      <div className="space-y-2 text-sm">
-                        <div className="flex justify-between">
-                          <code className="text-blue-300">/start</code>
-                          <span className="text-slate-400">Welcome message</span>
+                  {/* WhatsApp Integration */}
+                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
+                          <MessageCircle className="w-5 h-5 text-green-400" />
                         </div>
-                        <div className="flex justify-between">
-                          <code className="text-blue-300">/help</code>
-                          <span className="text-slate-400">Show help menu</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <code className="text-blue-300">/products</code>
-                          <span className="text-slate-400">Browse products</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <code className="text-blue-300">/orders</code>
-                          <span className="text-slate-400">Check order status</span>
+                        <div>
+                          <h3 className="font-semibold text-white">WhatsApp Business</h3>
+                          <p className="text-sm text-slate-400">Business messaging platform</p>
                         </div>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-sm text-gray-400">Not Connected</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors">
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Shopify Integration */}
+                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
+                          <ShoppingBag className="w-5 h-5 text-emerald-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-white">Shopify Store</h3>
+                          <p className="text-sm text-slate-400">E-commerce platform integration</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-sm text-gray-400">Not Connected</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button className="px-4 py-2 bg-emerald-500/20 text-emerald-400 rounded-lg hover:bg-emerald-500/30 transition-colors">
+                        Connect
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Instagram Integration */}
+                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
+                    <div className="flex items-center justify-between mb-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 bg-pink-500/20 rounded-lg flex items-center justify-center">
+                          <Instagram className="w-5 h-5 text-pink-400" />
+                        </div>
+                        <div>
+                          <h3 className="font-semibold text-white">Instagram Business</h3>
+                          <p className="text-sm text-slate-400">Social media messaging</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
+                        <span className="text-sm text-gray-400">Not Connected</span>
+                      </div>
+                    </div>
+                    
+                    <div className="flex gap-2">
+                      <button className="px-4 py-2 bg-pink-500/20 text-pink-400 rounded-lg hover:bg-pink-500/30 transition-colors">
+                        Connect
+                      </button>
                     </div>
                   </div>
                 </div>

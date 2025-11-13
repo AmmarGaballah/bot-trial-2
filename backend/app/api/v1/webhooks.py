@@ -114,11 +114,17 @@ async def telegram_webhook(
         
         # Save message
         new_message = Message(
-            customer_id=customer.id,
+            project_id=project_id,
             content=message_text,
             direction="inbound",
-            channel="telegram",
+            platform="telegram",
+            provider="telegram",
             external_id=str(message_id),
+            sender={
+                "telegram_id": telegram_id,
+                "name": from_user.get("first_name", "") + " " + from_user.get("last_name", ""),
+                "username": username
+            },
             status="received"
         )
         db.add(new_message)
@@ -380,14 +386,12 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
                 logger.error("Message not found for AI processing", message_id=message_id)
                 return
             
-            # Get customer
-            result = await db.execute(
-                select(Customer).where(Customer.id == message.customer_id)
-            )
-            customer = result.scalar_one_or_none()
+            # Get sender info from message
+            sender_info = message.sender or {}
+            telegram_id = sender_info.get("telegram_id")
             
-            if not customer:
-                logger.error("Customer not found", customer_id=str(message.customer_id))
+            if not telegram_id:
+                logger.error("No telegram_id in message sender info", message_id=message_id)
                 return
             
             # Get Telegram integration
@@ -441,26 +445,30 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
             
             # Send response
             await telegram_service.send_message(
-                chat_id=customer.telegram_id,
+                chat_id=telegram_id,
                 text=response_text
             )
             
             # Save outbound message
             outbound_message = Message(
-                customer_id=message.customer_id,
                 project_id=UUID(project_id),
                 content=response_text,
                 direction="outbound",
-                channel="telegram",
+                platform="telegram",
+                provider="telegram",
+                recipient={
+                    "telegram_id": telegram_id,
+                    "name": sender_info.get("name", "")
+                },
                 status="sent"
             )
             db.add(outbound_message)
             await db.commit()
             
             logger.info(
-                "Telegram echo response sent",
+                "Telegram AI response sent",
                 message_id=message_id,
-                customer_id=str(message.customer_id)
+                telegram_id=telegram_id
             )
             
     except Exception as e:

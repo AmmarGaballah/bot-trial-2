@@ -363,9 +363,52 @@ export const botTraining = {
   },
 };
 
+// Products API
+export const products = {
+  list: async (projectId) => {
+    return apiRequest(`/api/v1/products/${projectId}`);
+  },
+
+  get: async (projectId, productId) => {
+    return apiRequest(`/api/v1/products/${projectId}/${productId}`);
+  },
+
+  create: async (projectId, data) => {
+    return apiRequest(`/api/v1/products/${projectId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  },
+
+  update: async (projectId, productId, data) => {
+    return apiRequest(`/api/v1/products/${projectId}/${productId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  },
+
+  delete: async (projectId, productId) => {
+    return apiRequest(`/api/v1/products/${projectId}/${productId}`, {
+      method: 'DELETE',
+    });
+  },
+
+  bulkUpload: async (projectId, file) => {
+    const formData = new FormData();
+    formData.append('file', file);
+    
+    return apiRequest(`/api/v1/products/${projectId}/bulk-upload`, {
+      method: 'POST',
+      body: formData,
+      headers: {}, // Let browser set content-type for FormData
+    });
+  },
+};
+
 export default {
   auth,
   projects,
+  products,
   orders,
   messages,
   reports,
