@@ -11,7 +11,7 @@ from sqlalchemy import (
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
-from app.core.database import Base, AuthBase
+from app.core.database import Base
 import enum
 
 
@@ -84,7 +84,7 @@ class SubscriptionStatus(str, enum.Enum):
     PAST_DUE = "past_due"
 
 
-class User(AuthBase):
+class User(Base):
     """User account model."""
     __tablename__ = "users"
     
@@ -116,7 +116,7 @@ class User(AuthBase):
         return f"<User {self.email}>"
 
 
-class RefreshToken(AuthBase):
+class RefreshToken(Base):
     """Refresh token storage for secure token rotation."""
     __tablename__ = "refresh_tokens"
     
@@ -800,7 +800,7 @@ class CustomerProfile(Base):
     )
 
 
-class Subscription(AuthBase):
+class Subscription(Base):
     """User subscription and billing details."""
     __tablename__ = "subscriptions"
     

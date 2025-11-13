@@ -363,13 +363,13 @@ async def _get_or_create_customer(
 async def _process_telegram_message_with_ai(message_id: str, project_id: str):
     """Process Telegram message with AI and send response."""
     from app.services.integrations.telegram import TelegramService
-    from app.core.database import get_async_session
+    from app.core.database import AsyncSessionLocal
     from app.db.models import Message, Customer, Integration
     from sqlalchemy import select
     from uuid import UUID
     
     try:
-        async with get_async_session() as db:
+        async with AsyncSessionLocal() as db:
             # Fetch message
             result = await db.execute(
                 select(Message).where(Message.id == UUID(message_id))

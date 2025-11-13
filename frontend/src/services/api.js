@@ -3,7 +3,7 @@
  * Complete implementation with all endpoints
  */
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'https://ai-sales-bot-api-production-412b.up.railway.app';
 
 // Helper function to get auth token
 const getAuthToken = () => {
