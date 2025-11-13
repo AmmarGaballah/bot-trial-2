@@ -32,7 +32,8 @@ from app.api.v1 import (
     social_media,
     enhanced_bot,
     order_management,
-    subscriptions
+    subscriptions,
+    webhooks
 )
 
 # Configure structured logging
@@ -92,15 +93,7 @@ setup_error_handlers(app)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000", 
-        "http://localhost:5173",
-        "http://localhost:5174",
-        "https://bot-trial-2.vercel.app",
-        "https://bot-trial-2-git-main-badass-projects-8e1b0c9b.vercel.app",
-        "https://bot-trial-2-badass-projects-8e1b0c9b.vercel.app"
-    ],
+    allow_origins=settings.CORS_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
@@ -566,6 +559,12 @@ app.include_router(
     subscriptions.router,
     prefix=f"/api/{settings.API_VERSION}/subscriptions",
     tags=["Subscriptions & Billing"]
+)
+
+app.include_router(
+    webhooks.router,
+    prefix=f"/api/{settings.API_VERSION}/webhooks",
+    tags=["Webhooks"]
 )
 
 

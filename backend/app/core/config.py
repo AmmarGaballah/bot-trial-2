@@ -24,7 +24,7 @@ class Settings(BaseSettings):
     ENVIRONMENT: str = "development"
     DEBUG: bool = True
     API_VERSION: str = "v1"
-    TESTING_MODE: bool = True  # Enable for development/testing
+    TESTING_MODE: bool = False  # Disable for production security
     
     # Server
     HOST: str = "0.0.0.0"

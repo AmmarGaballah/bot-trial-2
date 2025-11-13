@@ -96,13 +96,7 @@ class User(Base):
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime(timezone=True))
     
-    # Subscription Information
-    subscription_tier = Column(SQLEnum(SubscriptionTier), default=SubscriptionTier.FREE, nullable=False)
-    subscription_status = Column(SQLEnum(SubscriptionStatus), default=SubscriptionStatus.ACTIVE, nullable=False)
-    subscription_started_at = Column(DateTime(timezone=True))
-    subscription_expires_at = Column(DateTime(timezone=True))
-    stripe_customer_id = Column(String(255), unique=True, index=True)
-    stripe_subscription_id = Column(String(255), unique=True, index=True)
+    # Note: Subscription details moved to separate Subscription model
     
     created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())

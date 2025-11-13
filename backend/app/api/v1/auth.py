@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 import structlog
 
-from app.core.database import get_auth_db
+from app.core.database import get_db
 from app.core.security import (
     get_password_hash, verify_password,
     create_access_token, create_refresh_token, decode_token,
@@ -90,7 +90,7 @@ async def test_me() -> Any:
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
 async def register(
     user_data: UserRegister,
-    db: AsyncSession = Depends(get_auth_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
     Register a new user account.
@@ -129,7 +129,7 @@ async def register(
 @router.post("/login", response_model=TokenResponse)
 async def login(
     credentials: UserLogin,
-    db: AsyncSession = Depends(get_auth_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
     Authenticate user and return access + refresh tokens.
@@ -194,7 +194,7 @@ async def login(
 @router.post("/refresh", response_model=TokenResponse)
 async def refresh_access_token(
     token_request: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_auth_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
     Refresh access token using refresh token.
@@ -289,7 +289,7 @@ async def refresh_access_token(
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
     token_request: RefreshTokenRequest,
-    db: AsyncSession = Depends(get_auth_db)
+    db: AsyncSession = Depends(get_db)
 ) -> None:
     """
     Logout user by invalidating refresh token.
@@ -313,7 +313,7 @@ async def logout(
 @router.get("/me", response_model=UserResponse)
 async def get_current_user(
     user_id: str = Depends(get_current_user_id),
-    db: AsyncSession = Depends(get_auth_db)
+    db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
     Get current authenticated user's information.
