@@ -30,7 +30,7 @@ export default function Products() {
   const createMutation = useMutation({
     mutationFn: (productData) => api.products.create(currentProject.id, productData),
     onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries({ queryKey: ['products', currentProject?.id] });
       toast.success('Product created successfully!');
       setShowAddModal(false);
     },
