@@ -18,13 +18,16 @@ export default function Products() {
   const [showUploadModal, setShowUploadModal] = useState(false);
 
   // Fetch products
-  const { data: products = [], isLoading } = useQuery({
+  const { data: productsResponse = {}, isLoading } = useQuery({
     queryKey: ['products', currentProject?.id],
     queryFn: async () => {
       return await api.products.list(currentProject.id);
     },
     enabled: !!currentProject,
   });
+  
+  // Extract products array from response
+  const products = productsResponse.products || [];
 
   // Create product mutation
   const createMutation = useMutation({
@@ -44,7 +47,7 @@ export default function Products() {
     mutationFn: ({ productId, data }) => 
       api.products.update(currentProject.id, productId, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries({ queryKey: ['products', currentProject?.id] });
       toast.success('Product updated successfully!');
       setEditingProduct(null);
     },
@@ -58,7 +61,7 @@ export default function Products() {
     mutationFn: (productId) => 
       api.products.delete(currentProject.id, productId),
     onSuccess: () => {
-      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries({ queryKey: ['products', currentProject?.id] });
       toast.success('Product deleted successfully!');
     },
     onError: (error) => {
@@ -70,7 +73,7 @@ export default function Products() {
   const uploadMutation = useMutation({
     mutationFn: (file) => api.products.bulkUpload(currentProject.id, file),
     onSuccess: (response) => {
-      queryClient.invalidateQueries(['products']);
+      queryClient.invalidateQueries({ queryKey: ['products', currentProject?.id] });
       toast.success(response.data.message);
       setShowUploadModal(false);
     },

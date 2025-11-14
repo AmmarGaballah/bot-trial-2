@@ -101,15 +101,6 @@ async def telegram_webhook(
         message_text = message.get("text", "")
         message_id = message.get("message_id")
         
-        # Find or create customer
-        customer = await _get_or_create_customer(
-            db=db,
-            telegram_id=telegram_id,
-            name=from_user.get("first_name", "") + " " + from_user.get("last_name", ""),
-            project_id=project_id,
-            channel="telegram"
-        )
-        
         # Save message
         new_message = Message(
             project_id=project_id,
@@ -139,7 +130,8 @@ async def telegram_webhook(
         logger.info(
             "Telegram message received",
             project_id=str(project_id),
-            customer_id=str(customer.id)
+            telegram_id=telegram_id,
+            message_id=str(new_message.id)
         )
         
         return {"status": "ok"}
