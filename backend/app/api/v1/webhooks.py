@@ -299,8 +299,9 @@ async def facebook_verify(project_id: UUID, request: Request) -> Any:
 async def _process_telegram_message_with_ai(message_id: str, project_id: str):
     """Process Telegram message with AI and send response."""
     from app.services.integrations.telegram import TelegramService
+    from app.services.telegram_commands import process_telegram_command
     from app.core.database import AsyncSessionLocal
-    from app.db.models import Message, Integration
+    from app.db.models import Message, Integration, IntegrationStatus
     from sqlalchemy import select
     from uuid import UUID
     
@@ -329,7 +330,7 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
                 select(Integration)
                 .where(Integration.project_id == UUID(project_id))
                 .where(Integration.provider == "telegram")
-                .where(Integration.status == "connected")
+                .where(Integration.status == IntegrationStatus.CONNECTED)
             )
             integration = result.scalar_one_or_none()
             
@@ -345,6 +346,20 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
             
             # Create Telegram service
             telegram_service = TelegramService(bot_token)
+            
+            # Check if message is a command
+            if message.content and message.content.startswith("/"):
+                is_command = await process_telegram_command(
+                    text=message.content,
+                    chat_id=telegram_id,
+                    project_id=UUID(project_id),
+                    telegram_service=telegram_service,
+                    db=db
+                )
+                
+                if is_command:
+                    logger.info("Command processed", command=message.content, chat_id=telegram_id)
+                    return
             
             # Generate AI response
             try:

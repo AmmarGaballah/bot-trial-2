@@ -302,6 +302,60 @@ export default function Settings() {
                       </div>
                     </div>
                     
+                    <div className="mt-6 pt-6 border-t border-white/10">
+                      <h4 className="text-sm font-semibold text-white mb-4">📱 Bot Commands</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-blue-400">/start</span>
+                            <span className="text-xs text-slate-400">Welcome & Menu</span>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            defaultChecked 
+                            className="w-4 h-4"
+                          />
+                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
+                        </div>
+                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-green-400">/products</span>
+                            <span className="text-xs text-slate-400">Show Products</span>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            defaultChecked 
+                            className="w-4 h-4"
+                          />
+                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
+                        </div>
+                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-orange-400">/track</span>
+                            <span className="text-xs text-slate-400">Track Orders</span>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            defaultChecked 
+                            className="w-4 h-4"
+                          />
+                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
+                        </div>
+                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                          <div className="flex items-center gap-2 mb-2">
+                            <span className="text-yellow-400">/rate</span>
+                            <span className="text-xs text-slate-400">Collect Feedback</span>
+                          </div>
+                          <input 
+                            type="checkbox" 
+                            defaultChecked 
+                            className="w-4 h-4"
+                          />
+                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
+                        </div>
+                      </div>
+                    </div>
+                    
                     <div className="flex gap-2">
                       <button className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2">
                         <RefreshCw className="w-4 h-4" />
