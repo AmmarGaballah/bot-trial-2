@@ -9,7 +9,7 @@ import structlog
 
 from app.db.models import Message, CustomerProfile, Integration
 from app.core.database import get_db, AsyncSessionLocal
-from app.workers.tasks.ai_tasks import process_incoming_message
+from app.workers.tasks import process_incoming_message
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import Depends
