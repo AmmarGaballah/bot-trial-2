@@ -7,10 +7,11 @@ from fastapi import APIRouter, Request, HTTPException, status, BackgroundTasks
 from uuid import UUID
 import structlog
 
-from app.db.models import Message, Customer
-from app.core.database import get_db
+from app.db.models import Message, CustomerProfile, Integration
+from app.core.database import get_db, AsyncSessionLocal
 from app.workers.tasks.ai_tasks import process_incoming_message
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from fastapi import Depends
 
 router = APIRouter()
@@ -35,21 +36,18 @@ async def whatsapp_webhook(
         message_text = payload.get("body", "")
         message_sid = payload.get("MessageSid")
         
-        # Find or create customer
-        customer = await _get_or_create_customer(
-            db=db,
-            phone=from_number,
-            project_id=project_id,
-            channel="whatsapp"
-        )
-        
         # Save message
         new_message = Message(
-            customer_id=customer.id,
+            project_id=project_id,
             content=message_text,
             direction="inbound",
-            channel="whatsapp",
+            platform="whatsapp",
+            provider="whatsapp",
             external_id=message_sid,
+            sender={
+                "phone": from_number,
+                "platform": "whatsapp"
+            },
             status="received"
         )
         db.add(new_message)
@@ -176,21 +174,18 @@ async def instagram_webhook(
         message_text = message.get("text", "")
         message_id = message.get("mid")
         
-        # Find or create customer
-        customer = await _get_or_create_customer(
-            db=db,
-            instagram_id=sender_id,
-            project_id=project_id,
-            channel="instagram"
-        )
-        
         # Save message
         new_message = Message(
-            customer_id=customer.id,
+            project_id=project_id,
             content=message_text,
             direction="inbound",
-            channel="instagram",
+            platform="instagram",
+            provider="instagram",
             external_id=message_id,
+            sender={
+                "instagram_id": sender_id,
+                "platform": "instagram"
+            },
             status="received"
         )
         db.add(new_message)
@@ -254,21 +249,18 @@ async def facebook_webhook(
                     message_text = message.get("text", "")
                     message_id = message.get("mid")
                     
-                    # Find or create customer
-                    customer = await _get_or_create_customer(
-                        db=db,
-                        facebook_id=sender_id,
-                        project_id=project_id,
-                        channel="facebook"
-                    )
-                    
                     # Save message
                     new_message = Message(
-                        customer_id=customer.id,
+                        project_id=project_id,
                         content=message_text,
                         direction="inbound",
-                        channel="facebook",
+                        platform="facebook",
+                        provider="facebook",
                         external_id=message_id,
+                        sender={
+                            "facebook_id": sender_id,
+                            "platform": "facebook"
+                        },
                         status="received"
                     )
                     db.add(new_message)
@@ -308,69 +300,15 @@ async def facebook_verify(project_id: UUID, request: Request) -> Any:
     raise HTTPException(status_code=status.HTTP_403_FORBIDDEN)
 
 
-async def _get_or_create_customer(
-    db: AsyncSession,
-    project_id: UUID,
-    channel: str,
-    phone: str = None,
-    telegram_id: str = None,
-    instagram_id: str = None,
-    facebook_id: str = None,
-    name: str = None
-) -> Customer:
-    """Helper to find or create a customer."""
-    from sqlalchemy import select, or_
-    
-    # Build query based on available identifiers
-    conditions = []
-    if phone:
-        conditions.append(Customer.phone == phone)
-    if telegram_id:
-        conditions.append(Customer.telegram_id == telegram_id)
-    if instagram_id:
-        conditions.append(Customer.instagram_id == instagram_id)
-    if facebook_id:
-        conditions.append(Customer.facebook_id == facebook_id)
-    
-    if not conditions:
-        raise ValueError("At least one customer identifier required")
-    
-    result = await db.execute(
-        select(Customer)
-        .where(Customer.project_id == project_id)
-        .where(or_(*conditions))
-    )
-    customer = result.scalar_one_or_none()
-    
-    if not customer:
-        # Create new customer
-        customer = Customer(
-            project_id=project_id,
-            name=name or "Unknown Customer",
-            phone=phone,
-            telegram_id=telegram_id,
-            instagram_id=instagram_id,
-            facebook_id=facebook_id,
-            channel=channel
-        )
-        db.add(customer)
-        await db.commit()
-        await db.refresh(customer)
-        
-        logger.info(
-            "New customer created",
-            customer_id=str(customer.id),
-            channel=channel
-        )
-    
-    return customer
+# Customer model removed - using CustomerProfile instead
+# Webhooks now store sender info directly in Message.sender JSONB field
 
 
 async def _process_telegram_message_with_ai(message_id: str, project_id: str):
     """Process Telegram message with AI and send response."""
     from app.services.integrations.telegram import TelegramService
     from app.core.database import AsyncSessionLocal
-    from app.db.models import Message, Customer, Integration
+    from app.db.models import Message, Integration
     from sqlalchemy import select
     from uuid import UUID
     
