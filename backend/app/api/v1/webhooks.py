@@ -82,7 +82,6 @@ async def whatsapp_webhook(
 async def telegram_webhook(
     project_id: UUID,
     request: Request,
-    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db)
 ) -> Any:
     """
@@ -93,6 +92,9 @@ async def telegram_webhook(
         
         # Extract message details
         message = payload.get("message", {})
+        if not message:
+            return {"status": "ok"}
+        
         chat = message.get("chat", {})
         from_user = message.get("from", {})
         
@@ -120,28 +122,25 @@ async def telegram_webhook(
         await db.commit()
         await db.refresh(new_message)
         
-        # Process AI response directly (instead of requiring Celery worker)
-        background_tasks.add_task(
-            _process_telegram_message_with_ai,
-            str(new_message.id),
-            str(project_id)
-        )
-        
-        logger.info(
-            "Telegram message received",
-            project_id=str(project_id),
-            telegram_id=telegram_id,
-            message_id=str(new_message.id)
-        )
+        # Queue message processing via Celery
+        try:
+            from app.workers.tasks.ai_tasks import process_incoming_message
+            process_incoming_message.delay(str(new_message.id), str(project_id))
+            logger.info(
+                "Telegram message queued for processing",
+                project_id=str(project_id),
+                telegram_id=telegram_id,
+                message_id=str(new_message.id)
+            )
+        except Exception as e:
+            logger.error("Failed to queue message processing", error=str(e))
         
         return {"status": "ok"}
         
     except Exception as e:
         logger.error("Telegram webhook error", error=str(e))
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=str(e)
-        )
+        # Always return 200 OK to Telegram
+        return {"status": "ok"}
 
 
 @router.post("/instagram/{project_id}")
@@ -184,14 +183,13 @@ async def instagram_webhook(
         await db.commit()
         await db.refresh(new_message)
         
-        # Queue AI processing
-        background_tasks.add_task(
-            process_incoming_message.delay,
-            str(new_message.id),
-            str(project_id)
-        )
-        
-        logger.info("Instagram message received", project_id=str(project_id))
+        # Queue AI processing via Celery
+        try:
+            from app.workers.tasks.ai_tasks import process_incoming_message
+            process_incoming_message.delay(str(new_message.id), str(project_id))
+            logger.info("Instagram message queued for processing", project_id=str(project_id))
+        except Exception as e:
+            logger.error("Failed to queue Instagram message", error=str(e))
         
         return {"status": "received"}
         
@@ -259,12 +257,12 @@ async def facebook_webhook(
                     await db.commit()
                     await db.refresh(new_message)
                     
-                    # Queue AI processing
-                    background_tasks.add_task(
-                        process_incoming_message.delay,
-                        str(new_message.id),
-                        str(project_id)
-                    )
+                    # Queue AI processing via Celery
+                    try:
+                        from app.workers.tasks.ai_tasks import process_incoming_message
+                        process_incoming_message.delay(str(new_message.id), str(project_id))
+                    except Exception as e:
+                        logger.error("Failed to queue Facebook message", error=str(e))
         
         logger.info("Facebook message received", project_id=str(project_id))
         
