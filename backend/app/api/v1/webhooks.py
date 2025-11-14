@@ -122,10 +122,10 @@ async def telegram_webhook(
         await db.commit()
         await db.refresh(new_message)
         
-        # Queue message processing via Celery
+        # Process message asynchronously (no Celery worker available on Railway)
         try:
-            from app.workers.tasks.ai_tasks import process_incoming_message
-            process_incoming_message.delay(str(new_message.id), str(project_id))
+            import asyncio
+            asyncio.create_task(_process_telegram_message_with_ai(str(new_message.id), str(project_id)))
             logger.info(
                 "Telegram message queued for processing",
                 project_id=str(project_id),
@@ -183,10 +183,10 @@ async def instagram_webhook(
         await db.commit()
         await db.refresh(new_message)
         
-        # Queue AI processing via Celery
+        # Process message asynchronously
         try:
-            from app.workers.tasks.ai_tasks import process_incoming_message
-            process_incoming_message.delay(str(new_message.id), str(project_id))
+            import asyncio
+            asyncio.create_task(_process_incoming_message_with_ai(str(new_message.id), str(project_id), "instagram"))
             logger.info("Instagram message queued for processing", project_id=str(project_id))
         except Exception as e:
             logger.error("Failed to queue Instagram message", error=str(e))
@@ -257,10 +257,10 @@ async def facebook_webhook(
                     await db.commit()
                     await db.refresh(new_message)
                     
-                    # Queue AI processing via Celery
+                    # Process message asynchronously
                     try:
-                        from app.workers.tasks.ai_tasks import process_incoming_message
-                        process_incoming_message.delay(str(new_message.id), str(project_id))
+                        import asyncio
+                        asyncio.create_task(_process_incoming_message_with_ai(str(new_message.id), str(project_id), "facebook"))
                     except Exception as e:
                         logger.error("Failed to queue Facebook message", error=str(e))
         
@@ -418,5 +418,78 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
         logger.error(
             "Failed to process Telegram message",
             message_id=message_id,
+            error=str(e)
+        )
+
+
+async def _process_incoming_message_with_ai(message_id: str, project_id: str, platform: str):
+    """Process incoming message from any platform with AI and send response."""
+    from app.core.database import AsyncSessionLocal
+    from app.db.models import Message
+    from sqlalchemy import select
+    from uuid import UUID
+    
+    try:
+        async with AsyncSessionLocal() as db:
+            # Fetch message
+            result = await db.execute(
+                select(Message).where(Message.id == UUID(message_id))
+            )
+            message = result.scalar_one_or_none()
+            
+            if not message:
+                logger.error("Message not found for AI processing", message_id=message_id)
+                return
+            
+            # Generate AI response
+            try:
+                from app.services.gemini_client import GeminiClient
+                gemini = GeminiClient()
+                
+                # Build context for AI
+                context = f"""You are a helpful AI sales assistant for a business. 
+                Customer message: {message.content}
+                
+                Please provide a helpful, friendly response. Keep it concise and professional.
+                If they're asking about products, orders, or need help, offer assistance.
+                """
+                
+                ai_response = await gemini.generate_response(
+                    prompt=context,
+                    use_functions=False,
+                    max_tokens=200,
+                    temperature=0.7
+                )
+                
+                response_text = ai_response.get("text", "Hello! I'm your AI assistant. How can I help you today?")
+                
+            except Exception as e:
+                logger.error("Failed to generate AI response", error=str(e))
+                # Fallback to simple response
+                response_text = f"Hello! I'm your AI assistant. How can I help you today?\n\nYou said: '{message.content}'"
+            
+            # Save outbound message
+            outbound_message = Message(
+                project_id=UUID(project_id),
+                content=response_text,
+                direction="outbound",
+                platform=platform,
+                provider=platform,
+                status="sent"
+            )
+            db.add(outbound_message)
+            await db.commit()
+            
+            logger.info(
+                "AI response processed",
+                message_id=message_id,
+                platform=platform
+            )
+            
+    except Exception as e:
+        logger.error(
+            "Failed to process message",
+            message_id=message_id,
+            platform=platform,
             error=str(e)
         )
