@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_new_features'
-down_revision = 'add_subscription_fields'  # Links to subscription fields migration
+down_revision = 'add_subscription_fields'
 branch_labels = None
 depends_on = None
 
