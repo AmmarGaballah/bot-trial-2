@@ -22,13 +22,24 @@ def upgrade() -> None:
     inspector = inspect(bind)
 
     # Ensure subscriptions table exists (new deployments may not have it yet)
+    subscription_tier_enum = sa.Enum(
+        'FREE', 'BASIC', 'PRO', 'ENTERPRISE',
+        name='subscriptiontier',
+        create_type=False
+    )
+    subscription_status_enum = sa.Enum(
+        'ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE',
+        name='subscriptionstatus',
+        create_type=False
+    )
+
     if not inspector.has_table('subscriptions'):
         op.create_table(
             'subscriptions',
             sa.Column('id', postgresql.UUID(as_uuid=True), primary_key=True, nullable=False),
             sa.Column('user_id', postgresql.UUID(as_uuid=True), sa.ForeignKey('users.id', ondelete='CASCADE'), nullable=False, unique=True),
-            sa.Column('tier', sa.Enum('FREE', 'BASIC', 'PRO', 'ENTERPRISE', name='subscriptiontier'), nullable=False, server_default='FREE'),
-            sa.Column('status', sa.Enum('ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE', name='subscriptionstatus'), nullable=False, server_default='ACTIVE'),
+            sa.Column('tier', subscription_tier_enum, nullable=False, server_default='FREE'),
+            sa.Column('status', subscription_status_enum, nullable=False, server_default='ACTIVE'),
             sa.Column('price_monthly', sa.Float(), nullable=False, server_default='0'),
             sa.Column('price_annually', sa.Float(), nullable=False, server_default='0'),
             sa.Column('billing_cycle', sa.String(length=50), nullable=False, server_default='monthly'),
