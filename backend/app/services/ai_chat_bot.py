@@ -459,7 +459,7 @@ Craft a concise response in the customer's language. If language is unknown, inf
 
         sanitized_lines: List[str] = []
         command_line_pattern = re.compile(
-            r"^\s*(?:/[\w-]+|command\s*:|cmd\s*:|cmd\s+>| 0B|shell\s*:)",
+            r"^\s*(?:/[\w-]+|command\s*:|cmd\s*:|cmd\s+>|shell\s*:)",
             re.IGNORECASE,
         )
 
