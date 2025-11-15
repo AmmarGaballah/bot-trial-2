@@ -143,9 +143,40 @@ class TelegramSettings(BaseModel):
     commands: Optional[Dict[str, TelegramCommandSettings]] = None
 
 
+class WhatsAppSettings(BaseModel):
+    business_account_id: Optional[str] = None
+    phone_number_id: Optional[str] = None
+    access_token: Optional[str] = None
+    auto_reply_enabled: Optional[bool] = None
+    default_response: Optional[str] = None
+    keyword_triggers: Optional[List[str]] = None
+
+
+class InstagramSettings(BaseModel):
+    business_account_id: Optional[str] = None
+    app_id: Optional[str] = None
+    app_secret: Optional[str] = None
+    auto_reply_enabled: Optional[bool] = None
+    auto_dm_keywords: Optional[List[str]] = None
+    comment_reply_enabled: Optional[bool] = None
+    default_response: Optional[str] = None
+
+
+class FacebookSettings(BaseModel):
+    page_id: Optional[str] = None
+    app_id: Optional[str] = None
+    app_secret: Optional[str] = None
+    auto_reply_enabled: Optional[bool] = None
+    default_response: Optional[str] = None
+    keyword_triggers: Optional[List[str]] = None
+
+
 class IntegrationConfigUpdate(BaseModel):
     api_key: Optional[str] = None
     telegram_settings: Optional[TelegramSettings] = None
+    whatsapp_settings: Optional[WhatsAppSettings] = None
+    instagram_settings: Optional[InstagramSettings] = None
+    facebook_settings: Optional[FacebookSettings] = None
 
 
 class IntegrationUpdate(BaseModel):

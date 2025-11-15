@@ -17,10 +17,24 @@ from app.models.schemas import (
     IntegrationUpdate,
     IntegrationResponse,
     TelegramSettings,
+    WhatsAppSettings,
+    InstagramSettings,
+    FacebookSettings,
 )
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
+
+
+def _merge_settings(existing: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+    """Merge nested settings dictionaries without mutating the originals."""
+    base = existing.copy() if isinstance(existing, dict) else {}
+    for key, value in (updates or {}).items():
+        if isinstance(value, dict) and isinstance(base.get(key), dict):
+            base[key] = _merge_settings(base.get(key, {}), value)
+        else:
+            base[key] = value
+    return base
 
 
 async def verify_project_access(project_id: UUID, user_id: str, db: AsyncSession) -> Project:
@@ -300,6 +314,57 @@ async def update_integration(
 
             integration.config["telegram_settings"] = merged_settings
 
+        # Update WhatsApp-specific settings
+        whatsapp_settings_data = config_update.get("whatsapp_settings")
+        if whatsapp_settings_data is not None:
+            whatsapp_settings = WhatsAppSettings(**whatsapp_settings_data)
+            integration.config = integration.config or {}
+            current_settings = integration.config.get("whatsapp_settings") or {}
+
+            settings_payload = whatsapp_settings.model_dump(exclude_unset=True)
+            if "keyword_triggers" in settings_payload and settings_payload["keyword_triggers"] is not None:
+                settings_payload["keyword_triggers"] = [
+                    keyword.strip()
+                    for keyword in settings_payload["keyword_triggers"]
+                    if keyword and keyword.strip()
+                ]
+
+            integration.config["whatsapp_settings"] = _merge_settings(current_settings, settings_payload)
+
+        # Update Instagram-specific settings
+        instagram_settings_data = config_update.get("instagram_settings")
+        if instagram_settings_data is not None:
+            instagram_settings = InstagramSettings(**instagram_settings_data)
+            integration.config = integration.config or {}
+            current_settings = integration.config.get("instagram_settings") or {}
+
+            settings_payload = instagram_settings.model_dump(exclude_unset=True)
+            if "auto_dm_keywords" in settings_payload and settings_payload["auto_dm_keywords"] is not None:
+                settings_payload["auto_dm_keywords"] = [
+                    keyword.strip()
+                    for keyword in settings_payload["auto_dm_keywords"]
+                    if keyword and keyword.strip()
+                ]
+
+            integration.config["instagram_settings"] = _merge_settings(current_settings, settings_payload)
+
+        # Update Facebook-specific settings
+        facebook_settings_data = config_update.get("facebook_settings")
+        if facebook_settings_data is not None:
+            facebook_settings = FacebookSettings(**facebook_settings_data)
+            integration.config = integration.config or {}
+            current_settings = integration.config.get("facebook_settings") or {}
+
+            settings_payload = facebook_settings.model_dump(exclude_unset=True)
+            if "keyword_triggers" in settings_payload and settings_payload["keyword_triggers"] is not None:
+                settings_payload["keyword_triggers"] = [
+                    keyword.strip()
+                    for keyword in settings_payload["keyword_triggers"]
+                    if keyword and keyword.strip()
+                ]
+
+            integration.config["facebook_settings"] = _merge_settings(current_settings, settings_payload)
+
     for field, value in update_data.items():
         setattr(integration, field, value)
 
@@ -494,25 +559,41 @@ async def debug_integration(
 
 
 def _mask_sensitive_config(config: dict, provider: str) -> dict:
-    """Mask sensitive configuration values."""
-    if not config or not isinstance(config, dict):
+    """Mask sensitive configuration values, including nested structures."""
+    if not isinstance(config, dict):
         return {}
-        
-    masked = config.copy()
-    sensitive_keys = [
-        'api_key', 'api_secret', 'access_token', 
-        'refresh_token', 'password', 'secret'
+
+    sensitive_terms = [
+        "api_key",
+        "api_secret",
+        "access_token",
+        "refresh_token",
+        "password",
+        "secret",
+        "token",
     ]
-    
-    for key in sensitive_keys:
-        if key in masked:
-            value = str(masked[key])
-            if len(value) > 8:
-                masked[key] = f"{value[:4]}...{value[-4:]}"
-            else:
-                masked[key] = "***"
-    
-    return masked
+
+    def mask_value(value: Any) -> str:
+        if isinstance(value, str) and len(value) > 8:
+            return f"{value[:4]}...{value[-4:]}"
+        if isinstance(value, str) and value:
+            return "***"
+        return "***"
+
+    def recurse(node: Any) -> Any:
+        if isinstance(node, dict):
+            result: Dict[str, Any] = {}
+            for key, value in node.items():
+                if any(term in key.lower() for term in sensitive_terms):
+                    result[key] = mask_value(value)
+                else:
+                    result[key] = recurse(value)
+            return result
+        if isinstance(node, list):
+            return [recurse(item) for item in node]
+        return node
+
+    return recurse(config)
 
 
 def _serialize_integration(integration: Integration) -> IntegrationResponse:
