@@ -339,29 +339,29 @@ Respond in JSON format."""
 
         return context
 
-async def _generate_response(
-    self,
-    message: str,
-    intent: Dict[str, Any],
-    context: Dict[str, Any],
-    channel: str,
-    language: Optional[str],
-    customer_name: Optional[str]
-) -> Dict[str, Any]:
-    """Generate AI response based on message, intent, and context."""
-    
-    persona_prompt = self._get_persona_prompt(channel)
+    async def _generate_response(
+        self,
+        message: str,
+        intent: Dict[str, Any],
+        context: Dict[str, Any],
+        channel: str,
+        language: Optional[str],
+        customer_name: Optional[str]
+    ) -> Dict[str, Any]:
+        """Generate AI response based on message, intent, and context."""
+        
+        persona_prompt = self._get_persona_prompt(channel)
 
-    enhanced_context = {
-        **context,
-        "intent": intent,
-        "current_message": message,
-        "language": language,
-        "channel": channel,
-        "customer_name": customer_name,
-    }
+        enhanced_context = {
+            **context,
+            "intent": intent,
+            "current_message": message,
+            "language": language,
+            "channel": channel,
+            "customer_name": customer_name,
+        }
 
-    full_prompt = f"""{persona_prompt}
+        full_prompt = f"""{persona_prompt}
 
 Current situation:
 - Customer intent: {intent.get('primary_intent')}
@@ -372,47 +372,74 @@ Current situation:
 Customer message: "{message}"
 
 Craft a concise response in the customer's language. If language is unknown, infer from message. Mention relevant products or offers when helpful."""
+
+        response = await self.gemini_client.generate_response(
+            prompt=full_prompt,
+            context=enhanced_context,
+            use_functions=True,
+            temperature=0.7,
+            user_id=self.user_id,
+        )
+
+        metadata = response.setdefault("metadata", {})
+        metadata["persona"] = persona_prompt.split("\n", 1)[0]
+        if language:
+            metadata.setdefault("language", language)
+
+        return response
+
+    async def _execute_actions(self, function_calls: List[Dict[str, Any]]) -> List[str]:
+        """Run follow-up actions requested by the AI model."""
+        actions_taken: List[str] = []
+
+        for func_call in function_calls:
             function_name = func_call.get("name")
             parameters = func_call.get("parameters", {})
-            
+
             try:
                 if function_name == "update_order_status":
                     await self._update_order_status(
                         order_id=parameters.get("order_id"),
                         status=parameters.get("status"),
-                        note=parameters.get("note")
+                        note=parameters.get("note"),
                     )
-                    actions_taken.append(f"Updated order status to {parameters.get('status')}")
-                
+                    actions_taken.append(
+                        f"Updated order status to {parameters.get('status')}"
+                    )
+
                 elif function_name == "send_tracking_info":
                     await self._send_tracking_info(
                         order_id=parameters.get("order_id"),
-                        tracking_number=parameters.get("tracking_number")
+                        tracking_number=parameters.get("tracking_number"),
                     )
                     actions_taken.append("Sent tracking information")
-                
+
                 elif function_name == "schedule_followup":
                     await self._schedule_followup(
                         customer_id=parameters.get("customer_id"),
                         delay_hours=parameters.get("delay_hours"),
-                        message=parameters.get("message")
+                        message=parameters.get("message"),
                     )
                     actions_taken.append("Scheduled follow-up message")
-                
+
                 elif function_name == "create_support_ticket":
                     await self._create_support_ticket(
                         customer_id=parameters.get("customer_id"),
                         subject=parameters.get("subject"),
                         description=parameters.get("description"),
-                        priority=parameters.get("priority", "medium")
+                        priority=parameters.get("priority", "medium"),
                     )
                     actions_taken.append("Created support ticket for human review")
-                
-                logger.info(f"Executed action: {function_name}", parameters=parameters)
-                
-            except Exception as e:
-                logger.error(f"Failed to execute {function_name}", error=str(e))
-        
+
+                logger.info("Executed action", name=function_name, parameters=parameters)
+
+            except Exception as exc:
+                logger.error(
+                    "Failed to execute function call",
+                    name=function_name,
+                    error=str(exc),
+                )
+
         return actions_taken
     
     async def _update_order_status(
