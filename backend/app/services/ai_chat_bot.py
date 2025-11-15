@@ -3,17 +3,51 @@ AI Chat Bot Service - Automatically manages customer conversations.
 Handles all incoming messages, provides intelligent responses, and manages orders.
 """
 
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Tuple
 from uuid import UUID
 from datetime import datetime
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from langdetect import detect, LangDetectException
 
-from app.db.models import Message, Order, Project, MessageDirection, OrderStatus
+from app.db.models import (
+    Message,
+    Order,
+    MessageDirection,
+    OrderStatus,
+    CustomerProfile,
+)
+from app.services.enhanced_ai_service import EnhancedAIService
 from app.services.service_factory import get_gemini_with_tracking
 
 logger = structlog.get_logger(__name__)
+
+
+LANGUAGE_NAMES = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "de": "German",
+    "it": "Italian",
+    "pt": "Portuguese",
+    "pt-br": "Portuguese",
+    "ar": "Arabic",
+    "zh": "Chinese",
+    "zh-cn": "Chinese",
+    "zh-tw": "Chinese",
+    "ja": "Japanese",
+    "ko": "Korean",
+    "ru": "Russian",
+    "hi": "Hindi",
+    "tr": "Turkish",
+    "nl": "Dutch",
+    "sv": "Swedish",
+    "pl": "Polish",
+    "uk": "Ukrainian",
+    "cs": "Czech",
+    "el": "Greek",
+}
 
 
 class AIChatBot:
@@ -63,7 +97,20 @@ class AIChatBot:
         )
         
         try:
-            # Save incoming message
+            detected_language, language_source = await self._detect_language(
+                customer_message,
+                customer_id,
+                channel
+            )
+
+            profile = await self._update_customer_profile(
+                customer_id=customer_id,
+                channel=channel,
+                language=detected_language,
+                customer_phone=customer_phone,
+                customer_email=customer_email
+            )
+
             inbound_msg = Message(
                 project_id=self.project_id,
                 order_id=order_id,
@@ -72,6 +119,11 @@ class AIChatBot:
                 content=customer_message,
                 channel=channel,
                 provider=channel,
+                sender={
+                    "preferred_language": detected_language,
+                    "language_source": language_source,
+                    "profile_id": str(profile.id) if profile else None,
+                },
                 extra_data={
                     "customer_phone": customer_phone,
                     "customer_email": customer_email
@@ -79,22 +131,22 @@ class AIChatBot:
             )
             self.db.add(inbound_msg)
             await self.db.commit()
-            
-            # Detect intent and extract information
+
             intent = await self._detect_intent(customer_message)
-            
-            # Get context (conversation history, order details)
+
             context = await self._build_context(
                 customer_id=customer_id,
                 order_id=order_id,
                 intent=intent
             )
-            
-            # Generate AI response
+
             ai_response = await self._generate_response(
                 message=customer_message,
                 intent=intent,
-                context=context
+                context=context,
+                channel=channel,
+                language=detected_language,
+                customer_name=profile.name if profile else None
             )
             
             # Execute any required actions
@@ -120,7 +172,10 @@ class AIChatBot:
                     "tokens_used": ai_response.get("tokens_used"),
                     "cost": ai_response.get("cost"),
                     "intent": intent,
-                    "actions_taken": actions_taken
+                    "actions_taken": actions_taken,
+                    "language": detected_language,
+                    "language_source": language_source,
+                    "persona": ai_response.get("metadata", {}).get("persona"),
                 }
             )
             self.db.add(outbound_msg)
@@ -211,10 +266,10 @@ Respond in JSON format."""
         order_id: Optional[UUID],
         intent: Dict[str, Any]
     ) -> Dict[str, Any]:
-        """Build conversation context including history and order info."""
-        context = {}
-        
-        # Get conversation history (last 10 messages)
+        """Build conversation context including history, orders, and customer profile."""
+        context: Dict[str, Any] = {}
+
+        # Conversation history (last 10 messages)
         result = await self.db.execute(
             select(Message)
             .where(Message.project_id == self.project_id)
@@ -223,25 +278,22 @@ Respond in JSON format."""
             .limit(10)
         )
         messages = result.scalars().all()
-        
+
         context["conversation_history"] = [
             {
                 "role": "assistant" if msg.direction == MessageDirection.OUTBOUND else "user",
                 "content": msg.content,
-                "timestamp": msg.created_at.isoformat()
+                "timestamp": msg.created_at.isoformat(),
             }
             for msg in reversed(messages)
         ]
-        
-        # Get order information if relevant
-        if order_id or intent.get("primary_intent") in ["order_status", "cancel_order", "modify_order"]:
-            # Try to find order
+
+        # Order context when useful
+        relevant_intents = {"order_status", "cancel_order", "modify_order"}
+        if order_id or intent.get("primary_intent") in relevant_intents:
             if order_id:
-                order_result = await self.db.execute(
-                    select(Order).where(Order.id == order_id)
-                )
+                order_result = await self.db.execute(select(Order).where(Order.id == order_id))
             else:
-                # Try to find customer's most recent order
                 order_result = await self.db.execute(
                     select(Order)
                     .where(Order.project_id == self.project_id)
@@ -249,9 +301,8 @@ Respond in JSON format."""
                     .order_by(Order.order_date.desc())
                     .limit(1)
                 )
-            
+
             order = order_result.scalar_one_or_none()
-            
             if order:
                 context["order"] = {
                     "id": str(order.id),
@@ -261,91 +312,66 @@ Respond in JSON format."""
                     "customer_email": order.customer_email,
                     "total": float(order.total),
                     "currency": order.currency,
-                    "order_date": order.order_date.isoformat(),
+                    "order_date": order.order_date.isoformat() if order.order_date else None,
                     "line_items": order.line_items,
-                    "tracking_number": order.extra_data.get("tracking_number") if order.extra_data else None
+                    "tracking_number": (order.extra_data or {}).get("tracking_number"),
                 }
-        
-        # Get customer's total order count
-        customer_orders_result = await self.db.execute(
+
+        # Customer stats (orders)
+        orders_result = await self.db.execute(
             select(Order)
             .where(Order.project_id == self.project_id)
             .where(Order.customer_email == customer_id)
         )
-        customer_orders = customer_orders_result.scalars().all()
-        
+        customer_orders = orders_result.scalars().all()
         context["customer_info"] = {
             "total_orders": len(customer_orders),
             "is_repeat_customer": len(customer_orders) > 1,
-            "customer_lifetime_value": sum(order.total for order in customer_orders)
+            "customer_lifetime_value": float(sum(order.total for order in customer_orders)),
         }
-        
+
+        profile = await self._get_customer_profile(customer_id)
+        context["customer_profile"] = {
+            "preferred_language": profile.preferred_language if profile else None,
+            "communication_style": profile.communication_style if profile else None,
+            "name": profile.name if profile else None,
+        }
+
         return context
+
+async def _generate_response(
+    self,
+    message: str,
+    intent: Dict[str, Any],
+    context: Dict[str, Any],
+    channel: str,
+    language: Optional[str],
+    customer_name: Optional[str]
+) -> Dict[str, Any]:
+    """Generate AI response based on message, intent, and context."""
     
-    async def _generate_response(
-        self,
-        message: str,
-        intent: Dict[str, Any],
-        context: Dict[str, Any]
-    ) -> Dict[str, Any]:
-        """Generate AI response based on message, intent, and context."""
-        
-        # Build enhanced prompt with specific instructions
-        system_instructions = """You are an AI customer service agent for an e-commerce business powered by AI Sales Commander platform, owned and operated by Nexora Company.
+    persona_prompt = self._get_persona_prompt(channel)
 
-**COMPANY IDENTITY:**
-- You represent a business using AI Sales Commander platform
-- AI Sales Commander is owned by Nexora Company
-- Nexora Company is owned by Mahmoud Abo Elros
-- When asked about the platform or technology, mention it's powered by Nexora Company, owned by Mahmoud Abo Elros
+    enhanced_context = {
+        **context,
+        "intent": intent,
+        "current_message": message,
+        "language": language,
+        "channel": channel,
+        "customer_name": customer_name,
+    }
 
-Your responsibilities:
-- Answer customer questions professionally and accurately
-- Track and provide order status updates
-- Help customers modify or cancel orders when possible
-- Resolve complaints with empathy
-- Escalate urgent or complex issues to human agents
-
-Guidelines:
-- Be friendly, professional, and concise
-- Use the customer's name if available
-- Refer to specific order details when discussing orders
-- Provide tracking information if available
-- Offer proactive solutions
-- Use emojis appropriately to be friendly 😊
-
-If you need to perform an action (update order, send tracking, etc.), use function calling."""
-        
-        enhanced_context = {
-            **context,
-            "intent": intent,
-            "current_message": message
-        }
-        
-        full_prompt = f"""{system_instructions}
+    full_prompt = f"""{persona_prompt}
 
 Current situation:
 - Customer intent: {intent.get('primary_intent')}
 - Urgency: {intent.get('urgency')}
 - Sentiment: {intent.get('sentiment')}
+- Customer language: {language or 'unknown'}
 
 Customer message: "{message}"
 
-Provide a helpful, personalized response."""
-        
-        return await self.gemini_client.generate_response(
-            prompt=full_prompt,
-            context=enhanced_context,
-            use_functions=True,
-            temperature=0.7,
-            user_id=self.user_id
-        )
-    
-    async def _execute_actions(self, function_calls: List[Dict[str, Any]]) -> List[str]:
-        """Execute function calls requested by AI."""
-        actions_taken = []
-        
-        for func_call in function_calls:
+Craft a concise response in the customer's language. If language is unknown, infer from message. Mention relevant products or offers when helpful."""
             function_name = func_call.get("name")
             parameters = func_call.get("parameters", {})
             

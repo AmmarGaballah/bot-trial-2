@@ -44,6 +44,7 @@ pendulum==3.0.0
 ShopifyAPI==12.5.0
 twilio==8.11.1
 python-telegram-bot==20.8
+langdetect==1.0.9
 
 # Monitoring & Logging
 structlog==24.1.0
