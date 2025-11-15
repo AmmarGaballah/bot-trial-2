@@ -51,8 +51,8 @@ def upgrade() -> None:
         END$$;
     """)
 
-    subscription_tier_enum = sa.Enum('FREE', 'BASIC', 'PRO', 'ENTERPRISE', name='subscriptiontier', create_type=False)
-    subscription_status_enum = sa.Enum('ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE', name='subscriptionstatus', create_type=False)
+    subscription_tier_enum = postgresql.ENUM('FREE', 'BASIC', 'PRO', 'ENTERPRISE', name='subscriptiontier', create_type=False)
+    subscription_status_enum = postgresql.ENUM('ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE', name='subscriptionstatus', create_type=False)
 
     if not inspector.has_table('subscriptions'):
         op.create_table(
