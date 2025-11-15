@@ -131,8 +131,25 @@ class IntegrationConnect(BaseModel):
     config: Dict[str, Any]  # API keys, tokens, etc.
 
 
+class TelegramCommandSettings(BaseModel):
+    enabled: bool = True
+
+
+class TelegramSettings(BaseModel):
+    auto_reply_enabled: Optional[bool] = None
+    response_delay_seconds: Optional[int] = Field(default=None, ge=0, le=3600)
+    welcome_message: Optional[str] = None
+    fallback_message: Optional[str] = None
+    commands: Optional[Dict[str, TelegramCommandSettings]] = None
+
+
+class IntegrationConfigUpdate(BaseModel):
+    api_key: Optional[str] = None
+    telegram_settings: Optional[TelegramSettings] = None
+
+
 class IntegrationUpdate(BaseModel):
-    config: Optional[Dict[str, Any]] = None
+    config: Optional[IntegrationConfigUpdate] = None
     status: Optional[IntegrationStatus] = None
 
 

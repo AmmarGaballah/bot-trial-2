@@ -2,7 +2,7 @@
 Integration management endpoints for connecting external platforms.
 """
 
-from typing import List, Any
+from typing import List, Any, Dict
 from uuid import UUID
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +12,12 @@ import structlog
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.db.models import Project, Integration, IntegrationStatus
-from app.models.schemas import IntegrationConnect, IntegrationUpdate, IntegrationResponse
+from app.models.schemas import (
+    IntegrationConnect,
+    IntegrationUpdate,
+    IntegrationResponse,
+    TelegramSettings,
+)
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -262,19 +267,52 @@ async def update_integration(
     
     # Update fields
     update_data = integration_data.dict(exclude_unset=True)
+
+    if "config" in update_data:
+        config_update: Dict[str, Any] = update_data.pop("config") or {}
+
+        # Update API key if provided
+        if "api_key" in config_update:
+            integration.config = integration.config or {}
+            integration.config["api_key"] = config_update["api_key"]
+
+        # Update Telegram-specific settings
+        telegram_settings_data = config_update.get("telegram_settings")
+        if telegram_settings_data is not None:
+            telegram_settings = TelegramSettings(**telegram_settings_data)
+            integration.config = integration.config or {}
+            current_settings = integration.config.get("telegram_settings") or {}
+
+            settings_payload = telegram_settings.model_dump(exclude_unset=True)
+            merged_settings = {**current_settings, **settings_payload}
+
+            commands_payload = settings_payload.get("commands")
+            if commands_payload is not None:
+                existing_commands = current_settings.get("commands") or {}
+                merged_commands = {**existing_commands, **commands_payload}
+                merged_settings["commands"] = merged_commands
+
+            if merged_settings.get("response_delay_seconds") is not None:
+                try:
+                    merged_settings["response_delay_seconds"] = int(merged_settings["response_delay_seconds"])
+                except (TypeError, ValueError):
+                    merged_settings.pop("response_delay_seconds", None)
+
+            integration.config["telegram_settings"] = merged_settings
+
     for field, value in update_data.items():
         setattr(integration, field, value)
-    
+
     await db.commit()
     await db.refresh(integration)
-    
+
     logger.info(
         "Integration updated",
         integration_id=str(integration_id),
         project_id=str(project_id)
     )
-    
-    return integration
+
+    return _serialize_integration(integration)
 
 
 @router.delete("/{project_id}/{integration_id}", status_code=status.HTTP_204_NO_CONTENT)

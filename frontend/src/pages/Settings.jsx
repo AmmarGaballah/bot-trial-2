@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -46,12 +46,67 @@ export default function Settings() {
 
   const [saved, setSaved] = useState(false);
 
+  const { data: integrations, isLoading: isLoadingIntegrations } = useQuery({
+    queryKey: ['integrations', currentProject?.id],
+    queryFn: () => api.integrations.list(currentProject?.id),
+    enabled: !!currentProject?.id,
+  });
+
+  const telegramIntegration = useMemo(() => {
+    if (!integrations) return null;
+    return integrations.find((integration) => integration.provider === 'telegram') || null;
+  }, [integrations]);
+
+  const defaultTelegramSettings = {
+    auto_reply_enabled: true,
+    response_delay_seconds: 2,
+    welcome_message: "👋 Hello! I'm your AI assistant. How can I help you today?",
+    fallback_message: 'I am checking that for you and will get back shortly.',
+    commands: {
+      start: { enabled: true },
+      products: { enabled: true },
+      track: { enabled: true },
+      rate: { enabled: true },
+    },
+  };
+
+  const [telegramSettings, setTelegramSettings] = useState(defaultTelegramSettings);
+
+  useEffect(() => {
+    if (!telegramIntegration) return;
+
+    const remoteSettings = telegramIntegration.config?.telegram_settings || {};
+    setTelegramSettings((prev) => ({
+      ...defaultTelegramSettings,
+      ...prev,
+      ...remoteSettings,
+      commands: {
+        ...defaultTelegramSettings.commands,
+        ...(prev.commands || {}),
+        ...(remoteSettings.commands || {}),
+      },
+    }));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [telegramIntegration?.id]);
+
   const updateMutation = useMutation({
     mutationFn: (data) => api.projects.update(currentProject?.id, data),
     onSuccess: () => {
       queryClient.invalidateQueries(['projects']);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
+    },
+  });
+
+  const updateTelegramMutation = useMutation({
+    mutationFn: (payload) =>
+      api.integrations.update(currentProject?.id, telegramIntegration.id, payload),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries(['integrations', currentProject?.id]);
+      toast.success('Telegram settings updated');
+    },
+    onError: (error) => {
+      toast.error(error?.message || 'Failed to update Telegram settings');
     },
   });
 
@@ -66,6 +121,41 @@ export default function Settings() {
         theme: settings.theme
       }
     });
+  };
+
+  const handleTelegramSave = () => {
+    if (!telegramIntegration) return;
+
+    updateTelegramMutation.mutate({
+      config: {
+        telegram_settings: {
+          auto_reply_enabled: telegramSettings.auto_reply_enabled,
+          response_delay_seconds: telegramSettings.response_delay_seconds,
+          welcome_message: telegramSettings.welcome_message,
+          fallback_message: telegramSettings.fallback_message,
+          commands: telegramSettings.commands,
+        },
+      },
+    });
+  };
+
+  const handleTelegramToggle = (key) => {
+    setTelegramSettings((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }));
+  };
+
+  const handleCommandToggle = (commandKey) => {
+    setTelegramSettings((prev) => ({
+      ...prev,
+      commands: {
+        ...prev.commands,
+        [commandKey]: {
+          enabled: !prev.commands?.[commandKey]?.enabled,
+        },
+      },
+    }));
   };
 
   const tabs = [
@@ -250,159 +340,185 @@ export default function Settings() {
                 </div>
               )}
 
-              {activeTab === 'integrations' && (
-                <div className="space-y-6">
-                  <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
-                    <MessageSquare className="w-6 h-6 text-purple-400" />
-                    Integration Settings
-                  </h2>
-                  
-                  {/* Telegram Integration */}
-                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-                          <MessageSquare className="w-5 h-5 text-blue-400" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold text-white">Telegram Bot</h3>
-                          <p className="text-sm text-slate-400">AI-powered customer communication</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-green-400 rounded-full"></div>
-                        <span className="text-sm text-green-400">Connected</span>
-                      </div>
-                    </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-300">Auto-Reply</span>
-                          <button className="relative inline-flex h-6 w-11 items-center rounded-full bg-purple-500">
-                            <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-6" />
-                          </button>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-300">Response Delay</span>
-                          <input 
-                            type="number" 
-                            defaultValue="2" 
-                            className="w-20 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-sm"
-                          />
-                        </div>
+            {activeTab === 'integrations' && (
+              <div className="space-y-6">
+                <h2 className="text-2xl font-semibold text-white mb-4 flex items-center gap-2">
+                  <MessageSquare className="w-6 h-6 text-purple-400" />
+                  Integration Settings
+                </h2>
+                
+                {/* Telegram Integration */}
+                <div className="p-6 bg-white/5 rounded-xl border border-white/10">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
+                        <MessageSquare className="w-5 h-5 text-blue-400" />
                       </div>
                       <div>
-                        <label className="block text-sm text-slate-300 mb-2">Welcome Message</label>
-                        <textarea 
-                          rows={2}
-                          defaultValue="👋 Hello! I'm your AI assistant. How can I help you today?"
-                          className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm resize-none"
-                        />
+                        <h3 className="font-semibold text-white">Telegram Bot</h3>
+                        <p className="text-sm text-slate-400">AI-powered customer communication</p>
                       </div>
                     </div>
-                    
-                    <div className="mt-6 pt-6 border-t border-white/10">
-                      <h4 className="text-sm font-semibold text-white mb-4">📱 Bot Commands</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-blue-400">/start</span>
-                            <span className="text-xs text-slate-400">Welcome & Menu</span>
-                          </div>
-                          <input 
-                            type="checkbox" 
-                            defaultChecked 
-                            className="w-4 h-4"
-                          />
-                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
-                        </div>
-                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-green-400">/products</span>
-                            <span className="text-xs text-slate-400">Show Products</span>
-                          </div>
-                          <input 
-                            type="checkbox" 
-                            defaultChecked 
-                            className="w-4 h-4"
-                          />
-                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
-                        </div>
-                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-orange-400">/track</span>
-                            <span className="text-xs text-slate-400">Track Orders</span>
-                          </div>
-                          <input 
-                            type="checkbox" 
-                            defaultChecked 
-                            className="w-4 h-4"
-                          />
-                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
-                        </div>
-                        <div className="p-3 bg-white/5 rounded-lg border border-white/10">
-                          <div className="flex items-center gap-2 mb-2">
-                            <span className="text-yellow-400">/rate</span>
-                            <span className="text-xs text-slate-400">Collect Feedback</span>
-                          </div>
-                          <input 
-                            type="checkbox" 
-                            defaultChecked 
-                            className="w-4 h-4"
-                          />
-                          <label className="text-xs text-slate-300 ml-2">Enabled</label>
-                        </div>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <button className="px-4 py-2 bg-blue-500/20 text-blue-400 rounded-lg hover:bg-blue-500/30 transition-colors flex items-center gap-2">
-                        <RefreshCw className="w-4 h-4" />
-                        Sync
-                      </button>
-                      <button className="px-4 py-2 bg-white/5 text-white rounded-lg hover:bg-white/10 transition-colors flex items-center gap-2">
-                        <SettingsIcon className="w-4 h-4" />
-                        Configure
-                      </button>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-2 h-2 rounded-full ${
+                          telegramIntegration?.status === 'connected' ? 'bg-green-400' : 'bg-gray-400'
+                        }`}
+                      ></div>
+                      <span
+                        className={`text-sm ${
+                          telegramIntegration?.status === 'connected' ? 'text-green-400' : 'text-gray-400'
+                        }`}
+                      >
+                        {telegramIntegration?.status === 'connected' ? 'Connected' : 'Not Connected'}
+                      </span>
                     </div>
                   </div>
-
-                  {/* WhatsApp Integration */}
-                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-green-500/20 rounded-lg flex items-center justify-center">
-                          <MessageCircle className="w-5 h-5 text-green-400" />
+                  {isLoadingIntegrations && (
+                    <div className="text-sm text-slate-400">Loading integration settings...</div>
+                  )}
+                  {!telegramIntegration && !isLoadingIntegrations && (
+                    <div className="text-sm text-slate-400">
+                      No Telegram integration connected. Connect it first to configure settings.
+                    </div>
+                  )}
+                  {telegramIntegration && (
+                    <>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                        <div className="space-y-3">
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-300">Auto-Reply</span>
+                            <button
+                              onClick={() => handleTelegramToggle('auto_reply_enabled')}
+                              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                                telegramSettings.auto_reply_enabled ? 'bg-purple-500' : 'bg-slate-600'
+                              }`}
+                              disabled={updateTelegramMutation.isLoading}
+                            >
+                              <span
+                                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                                  telegramSettings.auto_reply_enabled ? 'translate-x-6' : 'translate-x-1'
+                                }`}
+                              />
+                            </button>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span className="text-sm text-slate-300">Response Delay</span>
+                            <input 
+                              type="number" 
+                              min={0}
+                              max={3600}
+                              value={telegramSettings.response_delay_seconds ?? ''}
+                              onChange={(e) =>
+                                setTelegramSettings((prev) => ({
+                                  ...prev,
+                                  response_delay_seconds: e.target.value === '' ? null : Number(e.target.value),
+                                }))
+                              }
+                              className="w-24 px-2 py-1 bg-white/5 border border-white/10 rounded text-white text-sm"
+                              disabled={updateTelegramMutation.isLoading}
+                            />
+                            <span className="text-xs text-slate-500 ml-2">seconds</span>
+                          </div>
                         </div>
                         <div>
-                          <h3 className="font-semibold text-white">WhatsApp Business</h3>
-                          <p className="text-sm text-slate-400">Business messaging platform</p>
+                          <label className="block text-sm text-slate-300 mb-2">Welcome Message</label>
+                          <textarea 
+                            rows={2}
+                            value={telegramSettings.welcome_message || ''}
+                            onChange={(e) =>
+                              setTelegramSettings((prev) => ({
+                                ...prev,
+                                welcome_message: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm resize-none"
+                            disabled={updateTelegramMutation.isLoading}
+                          />
+                          <label className="block text-sm text-slate-300 mb-2 mt-3">Fallback Message</label>
+                          <textarea
+                            rows={2}
+                            value={telegramSettings.fallback_message || ''}
+                            onChange={(e) =>
+                              setTelegramSettings((prev) => ({
+                                ...prev,
+                                fallback_message: e.target.value,
+                              }))
+                            }
+                            className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm resize-none"
+                            disabled={updateTelegramMutation.isLoading}
+                          />
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 bg-gray-400 rounded-full"></div>
-                        <span className="text-sm text-gray-400">Not Connected</span>
-                      </div>
-                    </div>
-                    
-                    <div className="flex gap-2">
-                      <button className="px-4 py-2 bg-green-500/20 text-green-400 rounded-lg hover:bg-green-500/30 transition-colors">
-                        Connect
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Shopify Integration */}
-                  <div className="p-6 bg-white/5 rounded-xl border border-white/10">
-                    <div className="flex items-center justify-between mb-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-emerald-500/20 rounded-lg flex items-center justify-center">
-                          <ShoppingBag className="w-5 h-5 text-emerald-400" />
+                      
+                      <div className="mt-6 pt-6 border-t border-white/10">
+                        <h4 className="text-sm font-semibold text-white mb-4">📱 Bot Commands</h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-blue-400">/start</span>
+                              <span className="text-xs text-slate-400">Welcome & Menu</span>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={telegramSettings.commands?.start?.enabled ?? false}
+                                onChange={() => handleCommandToggle('start')}
+                                className="w-4 h-4"
+                                disabled={updateTelegramMutation.isLoading}
+                              />
+                              Enabled
+                            </label>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-green-400">/products</span>
+                              <span className="text-xs text-slate-400">Show Products</span>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={telegramSettings.commands?.products?.enabled ?? false}
+                                onChange={() => handleCommandToggle('products')}
+                                className="w-4 h-4"
+                                disabled={updateTelegramMutation.isLoading}
+                              />
+                              Enabled
+                            </label>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-orange-400">/track</span>
+                              <span className="text-xs text-slate-400">Track Orders</span>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={telegramSettings.commands?.track?.enabled ?? false}
+                                onChange={() => handleCommandToggle('track')}
+                                className="w-4 h-4"
+                                disabled={updateTelegramMutation.isLoading}
+                              />
+                              Enabled
+                            </label>
+                          </div>
+                          <div className="p-3 bg-white/5 rounded-lg border border-white/10">
+                            <div className="flex items-center gap-2 mb-2">
+                              <span className="text-yellow-400">/rate</span>
+                              <span className="text-xs text-slate-400">Collect Feedback</span>
+                            </div>
+                            <label className="inline-flex items-center gap-2 text-xs text-slate-300">
+                              <input 
+                                type="checkbox" 
+                                checked={telegramSettings.commands?.rate?.enabled ?? false}
+                                onChange={() => handleCommandToggle('rate')}
+                                className="w-4 h-4"
+                                disabled={updateTelegramMutation.isLoading}
+                              />
+                              Enabled
+                            </label>
+                          </div>
                         </div>
-                        <div>
-                          <h3 className="font-semibold text-white">Shopify Store</h3>
-                          <p className="text-sm text-slate-400">E-commerce platform integration</p>
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
