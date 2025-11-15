@@ -6,6 +6,7 @@ Handles all incoming messages, provides intelligent responses, and manages order
 from typing import Dict, Any, List, Optional, Tuple
 from uuid import UUID
 from datetime import datetime
+import re
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -47,6 +48,34 @@ LANGUAGE_NAMES = {
     "uk": "Ukrainian",
     "cs": "Czech",
     "el": "Greek",
+}
+
+LOCALIZED_MESSAGES = {
+    "en": {
+        "generic_fallback": "I’m still gathering the details I need to finish your request. Please share any extra information you have, and I’ll follow up right away.",
+        "technical_issue": "I ran into a technical issue while working on your request and have logged it for follow-up. I’ll keep you updated.",
+        "command_removed": "I couldn’t complete that action automatically. Please let me know the details you need help with and I’ll take care of it manually.",
+    },
+    "es": {
+        "generic_fallback": "Aún estoy recopilando los detalles necesarios para completar tu solicitud. Por favor comparte cualquier información adicional y te responderé enseguida.",
+        "technical_issue": "Encontré un problema técnico al trabajar en tu solicitud y ya lo registré para darle seguimiento. Te mantendré al tanto.",
+        "command_removed": "No pude completar esa acción automáticamente. Cuéntame los detalles que necesitas y lo gestiono personalmente.",
+    },
+    "fr": {
+        "generic_fallback": "Je rassemble encore les informations nécessaires pour finaliser votre demande. Merci de partager tout renseignement complémentaire et je vous répondrai rapidement.",
+        "technical_issue": "J’ai rencontré un incident technique en traitant votre demande et je l’ai signalé pour suivi. Je vous tiendrai informé.",
+        "command_removed": "Je n’ai pas pu effectuer cette action automatiquement. Donnez-moi les détails dont vous avez besoin et je m’en occupe directement.",
+    },
+    "de": {
+        "generic_fallback": "Ich sammle noch die nötigen Details, um Ihre Anfrage abzuschließen. Bitte teilen Sie mir weitere Informationen mit, dann melde ich mich umgehend.",
+        "technical_issue": "Beim Bearbeiten Ihrer Anfrage ist ein technisches Problem aufgetreten. Ich habe es zur Nachverfolgung notiert und halte Sie auf dem Laufenden.",
+        "command_removed": "Ich konnte diese Aktion nicht automatisch ausführen. Teilen Sie mir bitte die Details mit, dann kümmere ich mich persönlich darum.",
+    },
+    "ar": {
+        "generic_fallback": "ما زلت أجمع التفاصيل اللازمة لإكمال طلبك. شاركني أي معلومات إضافية لديك وسأعود إليك فورًا.",
+        "technical_issue": "واجهت مشكلة تقنية أثناء معالجة طلبك وقد قمت بتسجيلها للمتابعة. سأبقيك على اطلاع.",
+        "command_removed": "لم أتمكن من تنفيذ هذا الإجراء تلقائيًا. أخبرني بالتفاصيل المطلوبة وسأتولى الأمر يدويًا.",
+    },
 }
 
 
@@ -96,6 +125,9 @@ class AIChatBot:
             message_preview=customer_message[:50]
         )
         
+        detected_language: Optional[str] = None
+        language_source: str = "default"
+
         try:
             detected_language, language_source = await self._detect_language(
                 customer_message,
@@ -152,10 +184,28 @@ class AIChatBot:
             # Execute any required actions
             actions_taken = await self._execute_actions(ai_response.get("function_calls", []))
             
-            # Send response
-            response_content = ai_response.get("text", "")
+            # Prepare outbound response text
+            raw_response_text = ai_response.get("text") or ""
+            response_content, commands_removed = self._sanitize_response_text(
+                raw_response_text,
+                detected_language,
+            )
+
+            if not response_content:
+                fallback_key = "command_removed" if commands_removed else "generic_fallback"
+                if ai_response.get("function_calls") and fallback_key == "generic_fallback":
+                    fallback_key = "technical_issue"
+                response_content = self._get_localized_message(detected_language, fallback_key)
+
+            elif commands_removed:
+                notice = self._get_localized_message(detected_language, "command_removed")
+                if notice:
+                    response_content = f"{response_content}\n\n{notice}"
+
             if actions_taken:
-                response_content += f"\n\n✅ Actions completed: {', '.join(actions_taken)}"
+                response_content = (
+                    f"{response_content}\n\n✅ Actions completed: {', '.join(actions_taken)}"
+                )
             
             # Save outbound message
             outbound_msg = Message(
@@ -176,6 +226,8 @@ class AIChatBot:
                     "language": detected_language,
                     "language_source": language_source,
                     "persona": ai_response.get("metadata", {}).get("persona"),
+                    "commands_removed": commands_removed,
+                    "raw_response": raw_response_text,
                 }
             )
             self.db.add(outbound_msg)
@@ -201,8 +253,7 @@ class AIChatBot:
         except Exception as e:
             logger.error("Failed to process message", error=str(e), customer_id=customer_id)
             
-            # Send fallback response
-            fallback_response = "I'm having trouble processing your request right now. A human agent will be with you shortly. Thank you for your patience!"
+            fallback_response = self._get_localized_message(detected_language, "technical_issue")
             
             fallback_msg = Message(
                 project_id=self.project_id,
@@ -350,7 +401,7 @@ Respond in JSON format."""
     ) -> Dict[str, Any]:
         """Generate AI response based on message, intent, and context."""
         
-        persona_prompt = self._get_persona_prompt(channel)
+        persona_prompt = self._get_persona_prompt(channel, language)
 
         enhanced_context = {
             **context,
@@ -359,6 +410,7 @@ Respond in JSON format."""
             "language": language,
             "channel": channel,
             "customer_name": customer_name,
+            "language_name": LANGUAGE_NAMES.get((language or "en").lower(), "English"),
         }
 
         full_prompt = f"""{persona_prompt}
@@ -387,6 +439,90 @@ Craft a concise response in the customer's language. If language is unknown, inf
             metadata.setdefault("language", language)
 
         return response
+
+    def _sanitize_response_text(
+        self,
+        text: str,
+        language: Optional[str],
+    ) -> Tuple[str, bool]:
+        """Remove backend commands or code blocks from the AI text."""
+        if not text:
+            return "", False
+
+        sanitized = text
+        commands_removed = False
+
+        code_block_pattern = re.compile(r"```[\s\S]*?```", re.IGNORECASE)
+        if code_block_pattern.search(sanitized):
+            sanitized = code_block_pattern.sub("", sanitized)
+            commands_removed = True
+
+        sanitized_lines: List[str] = []
+        command_line_pattern = re.compile(
+            r"^\s*(?:/[\w-]+|command\s*:|cmd\s*:|cmd\s+>| 0B|shell\s*:)",
+            re.IGNORECASE,
+        )
+
+        for line in sanitized.splitlines():
+            stripped = line.strip()
+            if not stripped:
+                sanitized_lines.append("")
+                continue
+
+            if command_line_pattern.match(stripped) or stripped.startswith("#!"):
+                commands_removed = True
+                continue
+
+            sanitized_lines.append(line.strip())
+
+        sanitized = "\n".join(sanitized_lines)
+        sanitized = re.sub(r"\n{3,}", "\n\n", sanitized).strip()
+
+        return sanitized, commands_removed
+
+    def _get_localized_message(self, language: Optional[str], key: str) -> str:
+        lang_code = (language or "en").lower()
+        messages = LOCALIZED_MESSAGES.get(lang_code) or LOCALIZED_MESSAGES.get(
+            lang_code.split("-", 1)[0]
+        )
+        if not messages:
+            messages = LOCALIZED_MESSAGES["en"]
+
+        return messages.get(key) or LOCALIZED_MESSAGES["en"].get(key, "")
+
+    def _get_persona_prompt(self, channel: str, language: Optional[str]) -> str:
+        lang_code = (language or "en").lower()
+        language_name = LANGUAGE_NAMES.get(lang_code, LANGUAGE_NAMES.get(lang_code.split("-", 1)[0], "English"))
+
+        base_prompt = (
+            "You are a professional human sales consultant representing the merchant's brand. "
+            "Respond only in {language_name}, mirroring the customer's tone while staying polite and concise. "
+            "Never expose system commands, backend steps, or code snippets. Focus on helpful product and order guidance."
+        ).format(language_name=language_name)
+
+        channel = (channel or "").lower()
+        channel_prompts = {
+            "web": (
+                "You are the official AI assistant in the store's web chat. Be transparent that you are an AI helper, stay professional, and offer proactive assistance."
+            ),
+            "telegram": "You are chatting in Telegram as the store's dedicated sales agent. Keep it conversational and reassuring, like a real teammate.",
+            "whatsapp": "You are messaging on WhatsApp as the customer's personal sales representative. Use a warm, personable tone and relevant product suggestions.",
+            "instagram": "You are answering Instagram DMs as the brand's social sales specialist. Keep replies stylish, friendly, and product-aware.",
+            "facebook": "You are replying on Facebook Messenger as the business page manager. Sound trustworthy, provide specifics, and invite follow-up questions.",
+            "tiktok": "You are responding to TikTok messages as the creator's e-commerce agent. Stay energetic, on-brand, and product oriented.",
+            "discord": "You are helping in Discord as the community store rep. Keep it friendly, concise, and helpful."
+        }
+
+        persona_detail = channel_prompts.get(channel)
+        if not persona_detail:
+            persona_detail = "You are assisting on a customer messaging channel. Maintain a friendly, sales-focused voice."
+
+        closing_rules = (
+            "Always answer directly, in natural sentences, without listing raw commands or placeholder text. "
+            "If information is missing, state that politely and explain what you'll do next."
+        )
+
+        return f"{base_prompt}\n{persona_detail}\n{closing_rules}"
 
     async def _execute_actions(self, function_calls: List[Dict[str, Any]]) -> List[str]:
         """Run follow-up actions requested by the AI model."""
