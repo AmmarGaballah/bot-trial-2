@@ -22,16 +22,37 @@ def upgrade() -> None:
     inspector = inspect(bind)
 
     # Ensure subscriptions table exists (new deployments may not have it yet)
-    subscription_tier_enum = sa.Enum(
-        'FREE', 'BASIC', 'PRO', 'ENTERPRISE',
-        name='subscriptiontier',
-        create_type=False
-    )
-    subscription_status_enum = sa.Enum(
-        'ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE',
-        name='subscriptionstatus',
-        create_type=False
-    )
+    # Ensure enum types exist (idempotent)
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname = 'subscriptiontier' AND n.nspname = 'public'
+            ) THEN
+                CREATE TYPE subscriptiontier AS ENUM ('FREE', 'BASIC', 'PRO', 'ENTERPRISE');
+            END IF;
+        END$$;
+    """)
+
+    op.execute("""
+        DO $$
+        BEGIN
+            IF NOT EXISTS (
+                SELECT 1
+                FROM pg_type t
+                JOIN pg_namespace n ON n.oid = t.typnamespace
+                WHERE t.typname = 'subscriptionstatus' AND n.nspname = 'public'
+            ) THEN
+                CREATE TYPE subscriptionstatus AS ENUM ('ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE');
+            END IF;
+        END$$;
+    """)
+
+    subscription_tier_enum = sa.Enum('FREE', 'BASIC', 'PRO', 'ENTERPRISE', name='subscriptiontier', create_type=False)
+    subscription_status_enum = sa.Enum('ACTIVE', 'INACTIVE', 'CANCELLED', 'PAST_DUE', name='subscriptionstatus', create_type=False)
 
     if not inspector.has_table('subscriptions'):
         op.create_table(
