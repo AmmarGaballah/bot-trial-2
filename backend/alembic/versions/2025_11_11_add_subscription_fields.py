@@ -1,7 +1,7 @@
 """Add subscription fields to users table
 
 Revision ID: add_subscription_fields
-Revises: add_new_features
+Revises: 6cecfbddb1a5
 Create Date: 2025-11-11 03:50:00.000000
 
 """
@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'add_subscription_fields'
-down_revision: Union[str, None] = 'add_new_features'  # Both depend on add_new_features, but this one runs first
+down_revision: Union[str, None] = '6cecfbddb1a5'  # Depends on initial migration
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
