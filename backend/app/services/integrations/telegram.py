@@ -49,16 +49,39 @@ class TelegramService:
             payload["reply_markup"] = reply_markup
         
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 response = await client.post(url, json=payload)
-                response.raise_for_status()
+                
+                if response.status_code != 200:
+                    error_data = response.json() if response.headers.get("content-type") == "application/json" else response.text
+                    logger.error(
+                        "Telegram API error",
+                        status_code=response.status_code,
+                        error=error_data,
+                        url=url,
+                        chat_id=chat_id
+                    )
+                    response.raise_for_status()
                 
                 result = response.json()
                 logger.info("Telegram message sent", chat_id=chat_id)
                 
                 return result
         except httpx.HTTPError as e:
-            logger.error("Failed to send Telegram message", error=str(e))
+            logger.error(
+                "Failed to send Telegram message",
+                error=str(e),
+                chat_id=chat_id,
+                url=url
+            )
+            raise
+        except Exception as e:
+            logger.error(
+                "Unexpected error sending Telegram message",
+                error=str(e),
+                error_type=type(e).__name__,
+                chat_id=chat_id
+            )
             raise
     
     async def send_photo(

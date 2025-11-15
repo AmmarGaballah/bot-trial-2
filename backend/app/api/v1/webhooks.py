@@ -339,7 +339,12 @@ async def _process_telegram_message_with_ai(message_id: str, project_id: str):
             # Get bot token
             bot_token = integration.config.get("api_key")
             if not bot_token:
-                logger.error("No bot token in integration config")
+                logger.error("No bot token in integration config", integration_id=str(integration.id))
+                return
+            
+            # Validate bot token format (should be numbers:string)
+            if ":" not in bot_token:
+                logger.error("Invalid bot token format - missing colon separator", token_length=len(bot_token))
                 return
             
             # Create Telegram service

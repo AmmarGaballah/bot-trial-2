@@ -1,7 +1,7 @@
 """Add usage_tracking table
 
 Revision ID: add_usage_tracking
-Revises: add_new_features
+Revises: add_product_catalog
 Create Date: 2025-11-14 14:00:00.000000
 
 """
@@ -11,7 +11,7 @@ from sqlalchemy.dialects import postgresql
 
 # revision identifiers, used by Alembic.
 revision = 'add_usage_tracking'
-down_revision = 'add_new_features'
+down_revision = 'add_product_catalog'
 branch_labels = None
 depends_on = None
 
