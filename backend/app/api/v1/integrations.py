@@ -190,12 +190,9 @@ async def list_integrations(
             .order_by(Integration.created_at.desc())
         )
         integrations = result.scalars().all()
-        
-        # Mask sensitive config data
-        for integration in integrations:
-            integration.config = _mask_sensitive_config(integration.config, integration.provider)
-        
-        return integrations
+
+        # Serialize with masked config without mutating DB records
+        return [_serialize_integration(integration) for integration in integrations]
         
     except HTTPException:
         # Re-raise HTTP exceptions (like access denied)
@@ -233,9 +230,7 @@ async def get_integration(
         )
     
     # Mask sensitive config data
-    integration.config = _mask_sensitive_config(integration.config, integration.provider)
-    
-    return integration
+    return _serialize_integration(integration)
 
 
 @router.patch("/{project_id}/{integration_id}", response_model=IntegrationResponse)
@@ -480,6 +475,13 @@ def _mask_sensitive_config(config: dict, provider: str) -> dict:
                 masked[key] = "***"
     
     return masked
+
+
+def _serialize_integration(integration: Integration) -> IntegrationResponse:
+    """Return an integration response with masked config without mutating the model."""
+    response = IntegrationResponse.model_validate(integration)
+    masked_config = _mask_sensitive_config(response.config, integration.provider)
+    return response.model_copy(update={"config": masked_config})
 
 
 async def _verify_and_setup_integration(integration: Integration, db: AsyncSession):
