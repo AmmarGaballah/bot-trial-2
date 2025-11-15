@@ -54,31 +54,49 @@ export default function Messages() {
   // Fetch conversations
   const { data: conversations, isLoading } = useQuery({
     queryKey: ['conversations', currentProject?.id, channelFilter],
-    queryFn: () => messagesApi.getConversations(currentProject?.id, { channel: channelFilter }),
-    enabled: !!currentProject,
+    queryFn: () => {
+      if (!currentProject?.id) return [];
+      const params = channelFilter === 'all' ? {} : { provider: channelFilter };
+      return messagesApi.getConversations(currentProject.id, params);
+    },
+    enabled: !!currentProject?.id,
   });
 
   // Fetch messages for selected conversation
-  const { data: conversationMessages } = useQuery({
-    queryKey: ['messages', selectedConversation?.id],
-    queryFn: () => messagesApi.getMessages(selectedConversation?.id),
-    enabled: !!selectedConversation,
+  const { data: conversationMessages, isLoading: isLoadingMessages } = useQuery({
+    queryKey: ['messages', currentProject?.id, selectedConversation?.id],
+    queryFn: () => {
+      if (!currentProject?.id || !selectedConversation?.id) return [];
+      const params = selectedConversation.channel
+        ? { provider: selectedConversation.channel }
+        : {};
+      return messagesApi.getMessages(
+        currentProject.id,
+        selectedConversation.id,
+        params
+      );
+    },
+    enabled: !!currentProject?.id && !!selectedConversation?.id,
   });
 
   // Send message mutation
   const sendMessageMutation = useMutation({
-    mutationFn: (data) => messagesApi.send(selectedConversation?.id, data),
+    mutationFn: (data) => messagesApi.send(currentProject?.id, data),
     onSuccess: () => {
-      queryClient.invalidateQueries(['messages', selectedConversation?.id]);
+      queryClient.invalidateQueries(['messages', currentProject?.id, selectedConversation?.id]);
       setMessageInput('');
     },
   });
 
   // AI auto-reply mutation
   const aiReplyMutation = useMutation({
-    mutationFn: (conversationId) => messagesApi.generateAIReply(conversationId),
+    mutationFn: ({ orderId, customerMessage }) =>
+      messagesApi.generateAIReply(currentProject?.id, {
+        order_id: orderId,
+        customer_message: customerMessage,
+      }),
     onSuccess: () => {
-      queryClient.invalidateQueries(['messages', selectedConversation?.id]);
+      queryClient.invalidateQueries(['messages', currentProject?.id, selectedConversation?.id]);
     },
   });
 
@@ -86,15 +104,35 @@ export default function Messages() {
     e.preventDefault();
     if (!messageInput.trim() || !selectedConversation) return;
 
+    const recipient = selectedConversation.recipient && Object.keys(selectedConversation.recipient).length > 0
+      ? selectedConversation.recipient
+      : {
+          customer_id: selectedConversation.customer_id,
+          phone: selectedConversation.customer_phone,
+          email: selectedConversation.customer_email,
+        };
+
     sendMessageMutation.mutate({
       content: messageInput,
-      channel: selectedConversation.channel
+      provider: selectedConversation.channel,
+      recipient,
+      order_id: selectedConversation.order_id || null,
     });
   };
 
   const handleAIReply = () => {
-    if (!selectedConversation) return;
-    aiReplyMutation.mutate(selectedConversation.id);
+    if (!selectedConversation || !conversationMessages?.length) return;
+
+    const latestInbound = [...conversationMessages]
+      .reverse()
+      .find((msg) => msg.direction === 'inbound');
+
+    if (!latestInbound) return;
+
+    aiReplyMutation.mutate({
+      orderId: selectedConversation.order_id,
+      customerMessage: latestInbound.content,
+    });
   };
 
   const filteredConversations = conversations?.filter(conv => 
@@ -285,7 +323,12 @@ export default function Messages() {
                   {/* Messages */}
                   <div className="flex-1 overflow-y-auto p-4 space-y-4">
                     <AnimatePresence>
-                      {conversationMessages?.map((msg, index) => {
+                      {isLoadingMessages ? (
+                      <div className="flex items-center justify-center py-10">
+                        <div className="animate-spin w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full" />
+                      </div>
+                    ) : (
+                      conversationMessages?.map((msg, index) => {
                         const isOutbound = msg.direction === 'outbound';
                         const isAI = msg.ai_generated;
 
@@ -330,7 +373,8 @@ export default function Messages() {
                             </div>
                           </motion.div>
                         );
-                      })}
+                      })
+                    )}
                     </AnimatePresence>
                   </div>
 

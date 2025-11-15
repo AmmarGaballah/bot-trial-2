@@ -241,6 +241,38 @@ class MessageResponse(BaseModel):
         from_attributes = True
 
 
+class ConversationSummary(BaseModel):
+    id: str
+    channel: str
+    customer_name: Optional[str]
+    customer_email: Optional[str]
+    customer_phone: Optional[str]
+    customer_id: Optional[str] = None
+    order_id: Optional[str] = None
+    last_message: Optional[str]
+    last_message_at: datetime
+    unread_count: int
+    total_messages: int
+    ai_messages: int
+    ai_enabled: bool
+    recipient: Dict[str, Any] = {}
+    profile_id: Optional[str] = None
+
+
+class ConversationMessage(BaseModel):
+    id: UUID
+    direction: MessageDirection
+    provider: str
+    content: str
+    content_type: str
+    created_at: datetime
+    ai_generated: bool = False
+    status: Optional[str] = None
+    sender: Dict[str, Any] = {}
+    recipient: Dict[str, Any] = {}
+    metadata: Dict[str, Any] = {}
+
+
 # ============================================================================
 # AI Assistant Schemas
 # ============================================================================

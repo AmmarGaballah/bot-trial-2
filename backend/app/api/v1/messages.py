@@ -2,7 +2,7 @@
 Message management and communication endpoints.
 """
 
-from typing import List, Any, Optional
+from typing import List, Any, Optional, Dict
 from uuid import UUID
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -13,7 +13,12 @@ import structlog
 from app.core.database import get_db
 from app.core.security import get_current_user_id
 from app.db.models import Project, Message, Order, MessageDirection
-from app.models.schemas import MessageSend, MessageResponse
+from app.models.schemas import (
+    MessageSend,
+    MessageResponse,
+    ConversationSummary,
+    ConversationMessage,
+)
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -35,6 +40,31 @@ async def verify_project_access(project_id: UUID, user_id: str, db: AsyncSession
         )
     
     return project
+
+
+def _resolve_customer_payload(msg: Message) -> Dict[str, Any]:
+    if msg.direction == MessageDirection.INBOUND:
+        return msg.sender or {}
+    return msg.recipient or {}
+
+
+def _resolve_conversation_id(msg: Message, customer_payload: Dict[str, Any]) -> str:
+    candidate_fields = [
+        str(msg.order_id) if msg.order_id else None,
+        customer_payload.get("conversation_id"),
+        customer_payload.get("profile_id"),
+        customer_payload.get("id"),
+        customer_payload.get("phone"),
+        customer_payload.get("email"),
+        customer_payload.get("username"),
+    ]
+
+    for candidate in candidate_fields:
+        if candidate:
+            return str(candidate)
+
+    # Fallback to message id to ensure uniqueness
+    return f"message-{msg.id}"
 
 
 @router.post("/{project_id}/send", response_model=MessageResponse, status_code=status.HTTP_201_CREATED)
@@ -143,6 +173,206 @@ async def get_inbox(
     messages = result.scalars().all()
     
     return messages
+
+
+@router.get("/{project_id}/conversations", response_model=List[ConversationSummary])
+async def get_conversations(
+    project_id: UUID,
+    provider: Optional[str] = Query(None, description="Filter by provider/channel"),
+    days: int = Query(30, description="Number of days to look back", ge=1, le=180),
+    limit: int = Query(50, description="Maximum conversations to return", ge=1, le=200),
+    search: Optional[str] = Query(None, description="Search by customer name, email, phone, or message"),
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db)
+) -> Any:
+    """Return aggregated conversation summaries for messaging inbox."""
+
+    await verify_project_access(project_id, user_id, db)
+
+    query = select(Message).where(Message.project_id == project_id)
+
+    if provider and provider.lower() != "all":
+        query = query.where(Message.provider == provider)
+
+    start_date = datetime.utcnow() - timedelta(days=days)
+    query = query.where(Message.created_at >= start_date)
+
+    # Pull recent messages (over-fetch to build summaries reliably)
+    query = query.order_by(Message.created_at.desc()).limit(limit * 10)
+
+    result = await db.execute(query)
+    messages = result.scalars().all()
+
+    conversations: dict[str, dict[str, Any]] = {}
+
+    for msg in messages:
+        customer_payload = _resolve_customer_payload(msg)
+        conversation_id = _resolve_conversation_id(msg, customer_payload)
+
+        convo = conversations.get(conversation_id)
+        if not convo:
+            convo = {
+                "channel": msg.provider or msg.platform or "unknown",
+                "customer_name": customer_payload.get("name")
+                or customer_payload.get("customer_name"),
+                "customer_email": customer_payload.get("email"),
+                "customer_phone": customer_payload.get("phone"),
+                "customer_id": customer_payload.get("customer_id")
+                or customer_payload.get("id")
+                or customer_payload.get("phone")
+                or customer_payload.get("email"),
+                "order_id": str(msg.order_id) if msg.order_id else None,
+                "last_message": None,
+                "last_message_at": None,
+                "unread_count": 0,
+                "total_messages": 0,
+                "ai_messages": 0,
+                "ai_enabled": False,
+                "recipient": customer_payload or {},
+                "profile_id": customer_payload.get("profile_id"),
+            }
+            conversations[conversation_id] = convo
+
+        convo["total_messages"] += 1
+        if msg.ai_generated:
+            convo["ai_messages"] += 1
+            convo["ai_enabled"] = True
+
+        if msg.direction == MessageDirection.INBOUND and not msg.is_read:
+            convo["unread_count"] += 1
+
+        created_at = msg.created_at
+        if created_at and (
+            convo["last_message_at"] is None or created_at > convo["last_message_at"]
+        ):
+            convo["last_message_at"] = created_at
+            convo["last_message"] = msg.content
+            convo["channel"] = msg.provider or msg.platform or convo["channel"]
+            convo["customer_name"] = (
+                customer_payload.get("name")
+                or customer_payload.get("customer_name")
+                or convo["customer_name"]
+            )
+            convo["customer_email"] = (
+                customer_payload.get("email") or convo["customer_email"]
+            )
+            convo["customer_phone"] = (
+                customer_payload.get("phone") or convo["customer_phone"]
+            )
+            convo["customer_id"] = (
+                customer_payload.get("customer_id")
+                or customer_payload.get("id")
+                or convo["customer_id"]
+            )
+            if msg.order_id:
+                convo["order_id"] = str(msg.order_id)
+            convo["profile_id"] = (
+                customer_payload.get("profile_id") or convo["profile_id"]
+            )
+            convo["recipient"] = customer_payload or {}
+
+    summaries: List[ConversationSummary] = []
+    search_term = search.lower() if search else None
+
+    for convo_id, data in conversations.items():
+        if not data["last_message_at"]:
+            continue
+
+        if search_term:
+            haystack = " ".join(
+                filter(
+                    None,
+                    [
+                        data.get("customer_name"),
+                        data.get("customer_email"),
+                        data.get("customer_phone"),
+                        data.get("last_message"),
+                    ],
+                )
+            ).lower()
+
+            if search_term not in haystack:
+                continue
+
+        summaries.append(
+            ConversationSummary(
+                id=convo_id,
+                channel=data["channel"],
+                customer_name=data["customer_name"],
+                customer_email=data["customer_email"],
+                customer_phone=data["customer_phone"],
+                customer_id=data["customer_id"],
+                order_id=data["order_id"],
+                last_message=data["last_message"],
+                last_message_at=data["last_message_at"],
+                unread_count=data["unread_count"],
+                total_messages=data["total_messages"],
+                ai_messages=data["ai_messages"],
+                ai_enabled=data["ai_enabled"],
+                recipient=data["recipient"],
+                profile_id=data["profile_id"],
+            )
+        )
+
+    summaries.sort(key=lambda item: item.last_message_at, reverse=True)
+
+    return summaries[:limit]
+
+
+@router.get(
+    "/{project_id}/conversations/{conversation_id}/messages",
+    response_model=List[ConversationMessage],
+)
+async def get_conversation_messages(
+    project_id: UUID,
+    conversation_id: str,
+    provider: Optional[str] = Query(None, description="Filter by provider/channel"),
+    days: int = Query(30, description="Number of days to look back", ge=1, le=180),
+    limit: int = Query(200, description="Maximum messages to inspect", ge=50, le=500),
+    user_id: str = Depends(get_current_user_id),
+    db: AsyncSession = Depends(get_db),
+) -> Any:
+    """Return messages belonging to the resolved conversation identifier."""
+
+    await verify_project_access(project_id, user_id, db)
+
+    query = select(Message).where(Message.project_id == project_id)
+
+    if provider and provider.lower() != "all":
+        query = query.where(Message.provider == provider)
+
+    start_date = datetime.utcnow() - timedelta(days=days)
+    query = query.where(Message.created_at >= start_date)
+
+    query = query.order_by(Message.created_at.desc()).limit(limit)
+
+    result = await db.execute(query)
+    messages = result.scalars().all()
+
+    matched: List[Message] = []
+    for msg in messages:
+        payload = _resolve_customer_payload(msg)
+        if _resolve_conversation_id(msg, payload) == conversation_id:
+            matched.append(msg)
+
+    matched.sort(key=lambda item: item.created_at or datetime.min)
+
+    return [
+        ConversationMessage(
+            id=message.id,
+            direction=message.direction,
+            provider=message.provider,
+            content=message.content,
+            content_type=message.content_type,
+            created_at=message.created_at,
+            ai_generated=message.ai_generated,
+            status=message.status,
+            sender=message.sender or {},
+            recipient=message.recipient or {},
+            metadata=message.extra_data or {},
+        )
+        for message in matched
+    ]
 
 
 @router.get("/{project_id}/{message_id}", response_model=MessageResponse)

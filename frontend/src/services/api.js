@@ -147,13 +147,15 @@ export const orders = {
 // Messages API
 export const messages = {
   getConversations: async (projectId, params = {}) => {
-    // Return mock data for now - backend endpoint needs to be implemented
-    return Promise.resolve([]);
+    const searchParams = new URLSearchParams(params).toString();
+    const query = searchParams ? `?${searchParams}` : '';
+    return apiRequest(`/api/v1/messages/${projectId}/conversations${query}`);
   },
 
-  getMessages: async (conversationId) => {
-    // Return mock data for now
-    return Promise.resolve([]);
+  getMessages: async (projectId, conversationId, params = {}) => {
+    const searchParams = new URLSearchParams(params).toString();
+    const query = searchParams ? `?${searchParams}` : '';
+    return apiRequest(`/api/v1/messages/${projectId}/conversations/${conversationId}/messages${query}`);
   },
 
   send: async (projectId, data) => {
