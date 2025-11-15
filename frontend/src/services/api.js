@@ -92,7 +92,7 @@ export const projects = {
 
   update: async (id, data) => {
     return apiRequest(`/api/v1/projects/${id}`, {
-      method: 'PUT',
+      method: 'PATCH',
       body: JSON.stringify(data),
     });
   },

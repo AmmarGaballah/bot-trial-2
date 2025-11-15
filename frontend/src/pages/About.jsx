@@ -354,49 +354,14 @@ const About = () => {
             <Heart className="w-16 h-16 text-pink-400 mx-auto animate-pulse" />
             <h2 className="text-4xl font-bold text-white mb-6">Dedication</h2>
             <div className="max-w-4xl mx-auto space-y-6 text-gray-300 text-lg leading-relaxed">
-              <p className="text-xl font-semibold text-purple-300">
-                To the people who carved their names into the foundation of my journey.
+              <p>
+                Sometimes you think you’ve found the one, the spark that shapes you, pushes you beyond your limits, the eternal sun you’ve been chasing. But remember this: no one alive can carve your path without your action. Others are only multipliers; you are the base. All along, you were looking into a mirror.
               </p>
-              
-              <div className="space-y-4 italic">
-                <p>
-                  To <span className="text-blue-400 font-bold">IDRIS GHAMED</span>, <span className="text-purple-400 font-bold">AYMAN ALI</span>, and <span className="text-pink-400 font-bold">SHADY</span> —<br />
-                  <span className="text-gray-400">the hands that helped build dreams out of raw chaos.</span><br />
-                  <span className="text-gray-300">Together, we turned midnight ideas into daylight empires.</span>
-                </p>
-
-                <p className="pt-4">
-                  To <span className="text-green-400 font-bold">AHMED HUSSIEN</span> —<br />
-                  <span className="text-gray-400">the one who stood even when the world faded,</span><br />
-                  <span className="text-gray-300">the voice that reminded me who I am when I almost forgot.</span>
-                </p>
-
-                <p className="pt-4 border-t border-white/10 pt-6">
-                  And to my eternal sun <span className="text-yellow-400 font-bold">MK</span> —
-                </p>
-                
-                <div className="space-y-2 pl-4 border-l-4 border-pink-500/30">
-                  <p className="text-gray-400">
-                    The legacy wasn't born from warmth,<br />
-                    but from bones cracked under silence.
-                  </p>
-                  <p className="text-gray-300">
-                    To the one who broke me —<br />
-                    no sorrow has ever cut deeper,<br />
-                    and no light has ever burned brighter.
-                  </p>
-                  <p className="text-pink-300 font-semibold">
-                    You left… but your light never did.
-                  </p>
-                  <p className="text-pink-400 font-bold text-xl">
-                    You are the wound and the fire.<br />
-                    The pain and the spark.
-                  </p>
-                </div>
-              </div>
-
-              <p className="text-center text-gray-500 italic text-sm mt-8 pt-6 border-t border-white/10">
-                "From the ashes of what was, we built what will be."
+              <p>
+                Believe in yourself. And yet, one day, you will meet someone you don’t even know, someone who leaves a mark you cannot anticipate. Know who deserves what. Even if you find yourself in hell, your eyes can still see the stars.
+              </p>
+              <p>
+                Love is never complete, remember, even princesses have loved fallen angels. So never see a broken heart as a loss; it’s just the beginning of another chapter. Each fatal blow, each fracture, reinforces you, building a mountain from your broken bones.
               </p>
             </div>
           </div>

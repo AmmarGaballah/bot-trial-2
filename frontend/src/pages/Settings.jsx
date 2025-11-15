@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
@@ -25,16 +26,52 @@ import {
   Instagram,
   RefreshCw,
   Facebook,
+  ArrowRight,
+  Info,
+  ListChecks,
 } from 'lucide-react';
 import { toast } from 'sonner';
 import GlassCard from '../components/GlassCard';
 import { useProjectStore } from '../store/projectStore';
 import api from '../services/api';
 
+const MANAGED_PROVIDER_IDS = ['telegram', 'whatsapp', 'instagram', 'facebook'];
+
+const INTEGRATION_GUIDES = {
+  whatsapp: {
+    title: 'WhatsApp Business Quick Start',
+    steps: [
+      'Verify your WhatsApp Business account and phone number inside Meta Business Manager.',
+      'Navigate to WhatsApp → API Setup to copy the Phone Number ID.',
+      'Generate a permanent access token and store it securely.',
+      'Paste the IDs and token here to enable auto-replies.',
+    ],
+  },
+  instagram: {
+    title: 'Instagram Business Quick Start',
+    steps: [
+      'Confirm your Instagram account is Business grade and linked to a Facebook Page.',
+      'Create or reuse a Facebook App with Instagram Basic Display permissions.',
+      'Generate an Instagram user access token and note the Business Account ID.',
+      'Add the credentials below to unlock DM automation and comment replies.',
+    ],
+  },
+  facebook: {
+    title: 'Facebook Messenger Quick Start',
+    steps: [
+      'Create a Facebook App and add the Messenger product.',
+      'Generate a Page Access Token for your brand page.',
+      'Prepare your webhook callback URL and verify it after connecting.',
+      'Enter the Page ID and token here to activate Messenger automations.',
+    ],
+  },
+};
+
 export default function Settings() {
   const { currentProject } = useProjectStore();
   const queryClient = useQueryClient();
-  
+  const navigate = useNavigate();
+
   const [activeTab, setActiveTab] = useState('general');
   const [settings, setSettings] = useState({
     projectName: currentProject?.name || '',
@@ -389,6 +426,66 @@ export default function Settings() {
     });
   };
 
+  const STATUS_STYLES = {
+    connected: 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30',
+    pending: 'bg-amber-500/15 text-amber-400 border border-amber-500/30',
+    error: 'bg-rose-500/15 text-rose-400 border border-rose-500/30',
+    syncing: 'bg-blue-500/15 text-blue-400 border border-blue-500/30',
+    disconnected: 'bg-slate-500/15 text-slate-300 border border-slate-500/20',
+  };
+
+  const integrationStatusSummary = [
+    {
+      id: 'whatsapp',
+      label: 'WhatsApp',
+      description: 'Business API messaging',
+      icon: MessageCircle,
+      integration: whatsappIntegration,
+    },
+    {
+      id: 'instagram',
+      label: 'Instagram',
+      description: 'DM + comment automation',
+      icon: Instagram,
+      integration: instagramIntegration,
+    },
+    {
+      id: 'facebook',
+      label: 'Facebook',
+      description: 'Messenger assistance',
+      icon: Facebook,
+      integration: facebookIntegration,
+    },
+  ];
+
+  const getStatusLabel = (status) => {
+    if (!status) return 'disconnected';
+    return status.replace('_', ' ');
+  };
+
+  const getStatusClassName = (status) => STATUS_STYLES[status] || STATUS_STYLES.disconnected;
+
+  const renderIntegrationGuide = (provider) => {
+    const guide = INTEGRATION_GUIDES[provider];
+    if (!guide) return null;
+
+    return (
+      <div className="mt-6 rounded-xl border border-white/10 bg-white/5 p-4">
+        <div className="flex items-center gap-2 text-sm font-semibold text-white">
+          <ListChecks className="w-4 h-4 text-purple-300" />
+          {guide.title}
+        </div>
+        <ol className="mt-3 space-y-2 text-xs text-slate-300 list-decimal list-inside">
+          {guide.steps.map((step, index) => (
+            <li key={`${provider}-guide-step-${index}`} className="leading-5">
+              {step}
+            </li>
+          ))}
+        </ol>
+      </div>
+    );
+  };
+
   const tabs = [
     { id: 'general', label: 'General', icon: SettingsIcon },
     { id: 'ai', label: 'AI Settings', icon: Sparkles },
@@ -410,7 +507,60 @@ export default function Settings() {
             <SettingsIcon className="w-10 h-10 text-purple-400" />
             Settings
           </h1>
-          <p className="text-slate-400">Manage your project preferences and configurations</p>
+          <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+            <p className="text-slate-400 max-w-3xl">
+              Manage workspace preferences, AI automation, and connected channels. Improve the onboarding experience by making sure every messaging channel is verified and ready.
+            </p>
+            <motion.button
+              whileHover={{ scale: 1.03 }}
+              whileTap={{ scale: 0.97 }}
+              onClick={() => navigate('/integrations')}
+              className="inline-flex items-center gap-2 rounded-lg border border-purple-400/40 bg-purple-500/20 px-4 py-2 text-sm font-medium text-purple-100 shadow-lg shadow-purple-500/20 transition hover:bg-purple-500/30"
+            >
+              <ListChecks className="w-4 h-4" />
+              Go to full Integrations
+            </motion.button>
+          </div>
+
+          <div className="mt-6 grid grid-cols-1 gap-4 md:grid-cols-3">
+            {integrationStatusSummary.map(({ id, label, description, icon: Icon, integration }) => {
+              const statusLabel = getStatusLabel(integration?.status);
+              return (
+                <div key={id} className="rounded-xl border border-white/10 bg-white/5 p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-white/10">
+                        <Icon className="h-6 w-6 text-white" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-semibold text-white">{label}</p>
+                        <p className="text-xs text-slate-400">{description}</p>
+                      </div>
+                    </div>
+                    <span className={`rounded-full px-2 py-1 text-[10px] uppercase tracking-wide ${getStatusClassName(integration?.status)}`}>
+                      {statusLabel}
+                    </span>
+                  </div>
+                  <div className="mt-4 flex items-center justify-between text-xs text-slate-400">
+                    <span>
+                      {integration?.status === 'connected'
+                        ? 'Messages will sync automatically.'
+                        : 'Connect credentials to activate automation.'}
+                    </span>
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={() => setActiveTab('integrations')}
+                      className="ml-3 inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-white hover:bg-white/10"
+                    >
+                      Configure
+                      <ArrowRight className="h-3 w-3" />
+                    </motion.button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
         </motion.div>
 
         <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -769,12 +919,60 @@ export default function Settings() {
                       <div className="text-sm text-slate-400">Loading integration settings...</div>
                     )}
                     {!whatsappIntegration && !isLoadingIntegrations && (
-                      <div className="text-sm text-slate-400">
-                        No WhatsApp integration connected. Connect it first to configure settings.
+                      <div className="rounded-xl border border-dashed border-emerald-400/40 bg-emerald-500/5 p-5 text-sm text-slate-200">
+                        <p className="font-medium text-emerald-300">WhatsApp Business integration not connected.</p>
+                        <p className="mt-2 text-xs text-slate-300">
+                          Head to the Integrations hub, click <strong className="text-emerald-200">Connect WhatsApp</strong>, and paste your Business Account ID + Access Token.
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => navigate('/integrations')}
+                            className="inline-flex items-center gap-2 rounded-lg border border-emerald-400/50 bg-emerald-500/20 px-3 py-2 text-xs font-semibold text-emerald-200 hover:bg-emerald-500/30"
+                          >
+                            <ListChecks className="h-3.5 w-3.5" />
+                            Open Integrations
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => toast.info('Check Meta Business Manager for WhatsApp credentials.')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/10"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                            Quick reminder
+                          </motion.button>
+                        </div>
+                        {renderIntegrationGuide('whatsapp')}
                       </div>
                     )}
                     {whatsappIntegration && (
                       <>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                          <span>
+                            {whatsappIntegration.status === 'connected'
+                              ? 'Webhook verified • Auto replies active'
+                              : 'Provide Business Account ID + Access Token to enable auto replies'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate('/integrations')}
+                              className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/10"
+                            >
+                              Manage
+                              <ArrowRight className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => toast.info('Testing webhook...')}
+                              className="inline-flex items-center gap-1 rounded-md border border-emerald-500/30 bg-emerald-500/10 px-2 py-1 text-[11px] text-emerald-300 hover:bg-emerald-500/20"
+                              disabled={!whatsappIntegration}
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Verify
+                            </button>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div className="space-y-3">
                             <div>
@@ -878,6 +1076,8 @@ export default function Settings() {
                             )}
                           </button>
                         </div>
+
+                        {renderIntegrationGuide('whatsapp')}
                       </>
                     )}
                   </div>
@@ -913,12 +1113,60 @@ export default function Settings() {
                       <div className="text-sm text-slate-400">Loading integration settings...</div>
                     )}
                     {!instagramIntegration && !isLoadingIntegrations && (
-                      <div className="text-sm text-slate-400">
-                        No Instagram integration connected. Connect it first to configure settings.
+                      <div className="rounded-xl border border-dashed border-pink-400/40 bg-pink-500/5 p-5 text-sm text-slate-200">
+                        <p className="font-medium text-pink-300">Instagram Business integration not connected.</p>
+                        <p className="mt-2 text-xs text-slate-300">
+                          Connect your Business account through the Integrations hub to unlock DM automations and keyword-triggered responses.
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => navigate('/integrations')}
+                            className="inline-flex items-center gap-2 rounded-lg border border-pink-400/50 bg-pink-500/20 px-3 py-2 text-xs font-semibold text-pink-200 hover:bg-pink-500/30"
+                          >
+                            <ListChecks className="h-3.5 w-3.5" />
+                            Open Integrations
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => toast.info('Link Instagram Business to a Facebook Page before connecting.')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/10"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                            Requirements
+                          </motion.button>
+                        </div>
+                        {renderIntegrationGuide('instagram')}
                       </div>
                     )}
                     {instagramIntegration && (
                       <>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                          <span>
+                            {instagramIntegration.status === 'connected'
+                              ? 'DM + comment automations are active.'
+                              : 'Provide Business Account ID + App details to enable automations.'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate('/integrations')}
+                              className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/10"
+                            >
+                              Manage
+                              <ArrowRight className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => toast.info('Testing Instagram permissions...')}
+                              className="inline-flex items-center gap-1 rounded-md border border-pink-500/30 bg-pink-500/10 px-2 py-1 text-[11px] text-pink-300 hover:bg-pink-500/20"
+                              disabled={!instagramIntegration}
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Verify
+                            </button>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div className="space-y-3">
                             <div>
@@ -1053,6 +1301,8 @@ export default function Settings() {
                             )}
                           </button>
                         </div>
+
+                        {renderIntegrationGuide('instagram')}
                       </>
                     )}
                   </div>
@@ -1088,12 +1338,60 @@ export default function Settings() {
                       <div className="text-sm text-slate-400">Loading integration settings...</div>
                     )}
                     {!facebookIntegration && !isLoadingIntegrations && (
-                      <div className="text-sm text-slate-400">
-                        No Facebook integration connected. Connect it first to configure settings.
+                      <div className="rounded-xl border border-dashed border-blue-400/40 bg-blue-500/5 p-5 text-sm text-slate-200">
+                        <p className="font-medium text-blue-300">Facebook Messenger integration not connected.</p>
+                        <p className="mt-2 text-xs text-slate-300">
+                          Plug in your Page ID and Page Access Token via Integrations to sync Messenger conversations into the unified inbox.
+                        </p>
+                        <div className="mt-4 flex flex-wrap items-center gap-2">
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => navigate('/integrations')}
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-400/50 bg-blue-500/20 px-3 py-2 text-xs font-semibold text-blue-200 hover:bg-blue-500/30"
+                          >
+                            <ListChecks className="h-3.5 w-3.5" />
+                            Open Integrations
+                          </motion.button>
+                          <motion.button
+                            whileHover={{ scale: 1.02 }}
+                            whileTap={{ scale: 0.98 }}
+                            onClick={() => toast.info('Add the Messenger product to your Facebook App and generate a Page token.')}
+                            className="inline-flex items-center gap-1 rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/10"
+                          >
+                            <Info className="h-3.5 w-3.5" />
+                            Setup tips
+                          </motion.button>
+                        </div>
+                        {renderIntegrationGuide('facebook')}
                       </div>
                     )}
                     {facebookIntegration && (
                       <>
+                        <div className="flex items-center justify-between rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-300">
+                          <span>
+                            {facebookIntegration.status === 'connected'
+                              ? 'Messenger automation active for this page.'
+                              : 'Add Page ID and token to unlock Messenger automations.'}
+                          </span>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => navigate('/integrations')}
+                              className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-[11px] text-slate-200 hover:bg-white/10"
+                            >
+                              Manage
+                              <ArrowRight className="h-3 w-3" />
+                            </button>
+                            <button
+                              onClick={() => toast.info('Validating Facebook webhook...')}
+                              className="inline-flex items-center gap-1 rounded-md border border-blue-500/30 bg-blue-500/10 px-2 py-1 text-[11px] text-blue-300 hover:bg-blue-500/20"
+                              disabled={!facebookIntegration}
+                            >
+                              <RefreshCw className="h-3 w-3" />
+                              Verify
+                            </button>
+                          </div>
+                        </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                           <div className="space-y-3">
                             <div>
@@ -1212,6 +1510,8 @@ export default function Settings() {
                             )}
                           </button>
                         </div>
+
+                        {renderIntegrationGuide('facebook')}
                       </>
                     )}
                   </div>

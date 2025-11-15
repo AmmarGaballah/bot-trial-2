@@ -281,7 +281,19 @@ export default function Integrations() {
   const [connectingProvider, setConnectingProvider] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState(null);
-  const [credentials, setCredentials] = useState({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
+  const initialCredentials = {
+    apiKey: '',
+    apiSecret: '',
+    webhookUrl: '',
+    shopDomain: '',
+    whatsappBusinessAccountId: '',
+    whatsappPhoneNumberId: '',
+    instagramBusinessAccountId: '',
+    facebookPageId: '',
+    facebookAppId: '',
+  };
+
+  const [credentials, setCredentials] = useState(initialCredentials);
   const [showInstructions, setShowInstructions] = useState(false);
   const [selectedInstructions, setSelectedInstructions] = useState(null);
 
@@ -316,7 +328,7 @@ export default function Integrations() {
       
       // Reset form
       setShowModal(false);
-      setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
+      setCredentials(initialCredentials);
       setConnectingProvider(null);
     },
     onError: (error) => {
@@ -420,14 +432,61 @@ export default function Integrations() {
     if (credentials.apiSecret && credentials.apiSecret.trim()) {
       configData.api_secret = credentials.apiSecret.trim();
     }
-    
+
     if (credentials.webhookUrl && credentials.webhookUrl.trim()) {
       configData.webhook_url = credentials.webhookUrl.trim();
     }
-    
-    // Add shop domain for Shopify
-    if (selectedProvider.id === 'shopify' && credentials.shopDomain && credentials.shopDomain.trim()) {
-      configData.shop_domain = credentials.shopDomain.trim();
+
+    if (selectedProvider.id === 'shopify') {
+      if (credentials.shopDomain && credentials.shopDomain.trim()) {
+        configData.shop_domain = credentials.shopDomain.trim();
+      } else {
+        toast.error('Shop domain is required for Shopify');
+        setConnectingProvider(null);
+        return;
+      }
+
+      if (!credentials.apiSecret || !credentials.apiSecret.trim()) {
+        toast.error('Admin API secret is required for Shopify');
+        setConnectingProvider(null);
+        return;
+      }
+    }
+
+    if (selectedProvider.id === 'whatsapp') {
+      if (!credentials.whatsappBusinessAccountId || !credentials.whatsappBusinessAccountId.trim()) {
+        toast.error('Business Account ID is required for WhatsApp');
+        setConnectingProvider(null);
+        return;
+      }
+      if (!credentials.whatsappPhoneNumberId || !credentials.whatsappPhoneNumberId.trim()) {
+        toast.error('Phone Number ID is required for WhatsApp');
+        setConnectingProvider(null);
+        return;
+      }
+      configData.business_account_id = credentials.whatsappBusinessAccountId.trim();
+      configData.phone_number_id = credentials.whatsappPhoneNumberId.trim();
+    }
+
+    if (selectedProvider.id === 'instagram') {
+      if (!credentials.instagramBusinessAccountId || !credentials.instagramBusinessAccountId.trim()) {
+        toast.error('Instagram Business Account ID is required');
+        setConnectingProvider(null);
+        return;
+      }
+      configData.business_account_id = credentials.instagramBusinessAccountId.trim();
+    }
+
+    if (selectedProvider.id === 'facebook') {
+      if (!credentials.facebookPageId || !credentials.facebookPageId.trim()) {
+        toast.error('Facebook Page ID is required');
+        setConnectingProvider(null);
+        return;
+      }
+      configData.page_id = credentials.facebookPageId.trim();
+      if (credentials.facebookAppId && credentials.facebookAppId.trim()) {
+        configData.app_id = credentials.facebookAppId.trim();
+      }
     }
     
     // Ensure we have the required api_key
@@ -801,21 +860,40 @@ export default function Integrations() {
             <form onSubmit={(e) => { e.preventDefault(); handleSubmitConnection(); }} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {selectedProvider.id === 'telegram' ? 'Bot Token *' : 
-                   selectedProvider.id === 'shopify' ? 'API Key *' : 
-                   'API Key *'}
+                  {(() => {
+                    switch (selectedProvider.id) {
+                      case 'telegram':
+                        return 'Bot Token *';
+                      case 'shopify':
+                        return 'Admin API Key *';
+                      case 'whatsapp':
+                        return 'Permanent Access Token *';
+                      case 'instagram':
+                        return 'User Access Token *';
+                      case 'facebook':
+                        return 'Page Access Token *';
+                      default:
+                        return 'API Key *';
+                    }
+                  })()}
                 </label>
                 <input
                   type="text"
                   value={credentials.apiKey}
                   onChange={(e) => setCredentials({ ...credentials, apiKey: e.target.value })}
                   placeholder={
-                    selectedProvider.id === 'telegram' ? '1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ' :
-                    selectedProvider.id === 'shopify' ? 'shpat_...' :
-                    'Enter your API key'
+                    selectedProvider.id === 'telegram'
+                      ? '1234567890:ABCdefGHIjklMNOpqrSTUvwxYZ'
+                      : selectedProvider.id === 'shopify'
+                        ? 'shpat_...'
+                        : selectedProvider.id === 'whatsapp'
+                          ? 'EAAG...'
+                          : selectedProvider.id === 'facebook'
+                            ? 'EAAG...'
+                            : 'Enter your API key'
                   }
                   className="input-glass w-full"
-                  autoComplete="username"
+                  autoComplete="off"
                   required
                 />
                 {selectedProvider.id === 'telegram' && (
@@ -844,21 +922,99 @@ export default function Integrations() {
                 </div>
               )}
 
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-2">
-                  {selectedProvider.id === 'shopify' ? 'API Secret *' : 'API Secret (optional)'}
-                </label>
-                <input
-                  type="password"
-                  value={credentials.apiSecret}
-                  onChange={(e) => setCredentials({ ...credentials, apiSecret: e.target.value })}
-                  placeholder={selectedProvider.id === 'shopify' ? 'Required for Shopify' : 'Enter your API secret'}
-                  className="input-glass w-full"
-                  autoComplete="current-password"
-                  required={selectedProvider.id === 'shopify'}
-                />
-              </div>
+              {selectedProvider.id === 'shopify' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Admin API Secret Key *
+                  </label>
+                  <input
+                    type="password"
+                    value={credentials.apiSecret}
+                    onChange={(e) => setCredentials({ ...credentials, apiSecret: e.target.value })}
+                    placeholder="Required for Shopify"
+                    className="input-glass w-full"
+                    autoComplete="current-password"
+                    required
+                  />
+                </div>
+              )}
 
+              {selectedProvider.id === 'whatsapp' && (
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Business Account ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={credentials.whatsappBusinessAccountId}
+                      onChange={(e) => setCredentials({ ...credentials, whatsappBusinessAccountId: e.target.value })}
+                      placeholder="123456789012345"
+                      className="input-glass w-full"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Phone Number ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={credentials.whatsappPhoneNumberId}
+                      onChange={(e) => setCredentials({ ...credentials, whatsappPhoneNumberId: e.target.value })}
+                      placeholder="987654321098765"
+                      className="input-glass w-full"
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
+              {selectedProvider.id === 'instagram' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
+                    Instagram Business Account ID *
+                  </label>
+                  <input
+                    type="text"
+                    value={credentials.instagramBusinessAccountId}
+                    onChange={(e) => setCredentials({ ...credentials, instagramBusinessAccountId: e.target.value })}
+                    placeholder="17841405793187218"
+                    className="input-glass w-full"
+                    required
+                  />
+                </div>
+              )}
+
+              {selectedProvider.id === 'facebook' && (
+                <div className="grid grid-cols-1 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      Page ID *
+                    </label>
+                    <input
+                      type="text"
+                      value={credentials.facebookPageId}
+                      onChange={(e) => setCredentials({ ...credentials, facebookPageId: e.target.value })}
+                      placeholder="112233445566778"
+                      className="input-glass w-full"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
+                      App ID (optional)
+                    </label>
+                    <input
+                      type="text"
+                      value={credentials.facebookAppId}
+                      onChange={(e) => setCredentials({ ...credentials, facebookAppId: e.target.value })}
+                      placeholder="987654321098765"
+                      className="input-glass w-full"
+                    />
+                  </div>
+                </div>
+              )}
               {selectedProvider.id !== 'shopify' && (
                 <div>
                   <label className="block text-sm font-medium text-gray-300 mb-2">
@@ -882,7 +1038,7 @@ export default function Integrations() {
                 whileTap={{ scale: 0.98 }}
                 onClick={() => {
                   setShowModal(false);
-                  setCredentials({ apiKey: '', apiSecret: '', webhookUrl: '', shopDomain: '' });
+                  setCredentials(initialCredentials);
                 }}
                 disabled={connectMutation.isPending}
                 className="flex-1 glass-card px-4 py-2 rounded-xl hover:bg-white/10 transition-colors"
