@@ -13,7 +13,7 @@ import sqlalchemy as sa
 
 # revision identifiers, used by Alembic.
 revision: str = 'add_subscription_fields'
-down_revision: Union[str, None] = 'add_new_features'
+down_revision: Union[str, None] = 'add_new_features'  # Both depend on add_new_features, but this one runs first
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
