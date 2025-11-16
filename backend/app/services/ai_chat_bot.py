@@ -10,7 +10,7 @@ import re
 import structlog
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from langdetect import detect, LangDetectException
+from langdetect import detect, detect_langs, LangDetectException
 
 from app.db.models import (
     Message,
@@ -28,7 +28,10 @@ logger = structlog.get_logger(__name__)
 
 LANGUAGE_NAMES = {
     "en": "English",
+    "en-us": "English",
+    "en-gb": "English",
     "es": "Spanish",
+    "es-419": "Spanish",
     "fr": "French",
     "de": "German",
     "it": "Italian",
@@ -49,6 +52,17 @@ LANGUAGE_NAMES = {
     "uk": "Ukrainian",
     "cs": "Czech",
     "el": "Greek",
+    "fa": "Persian",
+    "ur": "Urdu",
+    "he": "Hebrew",
+    "bn": "Bengali",
+    "ta": "Tamil",
+    "vi": "Vietnamese",
+    "th": "Thai",
+    "id": "Indonesian",
+    "ms": "Malay",
+    "sw": "Swahili",
+    "ka": "Georgian",
 }
 
 LOCALIZED_MESSAGES = {
@@ -78,6 +92,98 @@ LOCALIZED_MESSAGES = {
         "command_removed": "لم أتمكن من تنفيذ هذا الإجراء تلقائيًا. أخبرني بالتفاصيل المطلوبة وسأتولى الأمر يدويًا.",
     },
 }
+
+LANGUAGE_CODE_ALIASES = {
+    "en-us": "en",
+    "en-gb": "en",
+    "es-419": "es",
+    "pt-pt": "pt",
+    "pt-br": "pt-br",
+    "zh-cn": "zh",
+    "zh-tw": "zh",
+}
+
+LANGUAGE_DIRECTIVE_KEYWORDS = {
+    "language",
+    "speak",
+    "talk",
+    "reply",
+    "respond",
+    "write",
+    "type",
+    "use",
+    "switch",
+    "habla",
+    "hablar",
+    "responde",
+    "dillo",
+    "parla",
+    "parlez",
+    "تكلم",
+    "بال",
+}
+
+LANGUAGE_REQUEST_KEYWORDS = {
+    "en": {"english", "inglés", "ingles", "anglais"},
+    "es": {"spanish", "español", "espanol", "castellano"},
+    "fr": {"french", "français", "francais"},
+    "de": {"german", "deutsch"},
+    "it": {"italian", "italiano"},
+    "pt": {"portuguese", "português", "portugues"},
+    "pt-br": {"brazilian portuguese", "português do brasil", "portugues brasil"},
+    "ar": {"arabic", "arab", "عربي", "العربية", "بالعربي"},
+    "ru": {"russian", "русский", "russkiy"},
+    "zh": {"chinese", "mandarin", "中文", "汉语", "漢語"},
+    "ja": {"japanese", "日本語", "にほんご"},
+    "ko": {"korean", "한국어", "한글"},
+    "hi": {"hindi", "हिन्दी", "हिंदी"},
+    "tr": {"turkish", "türkçe", "turkce"},
+    "nl": {"dutch", "nederlands"},
+    "sv": {"swedish", "svenska"},
+    "pl": {"polish", "polski"},
+    "uk": {"ukrainian", "українська"},
+    "cs": {"czech", "čeština", "cesky"},
+    "fa": {"persian", "farsi", "فارسی"},
+    "ur": {"urdu", "اردو"},
+    "bn": {"bengali", "বাংলা"},
+    "ta": {"tamil", "தமிழ்"},
+    "vi": {"vietnamese", "tiếng việt"},
+    "th": {"thai", "ภาษาไทย"},
+    "id": {"indonesian", "bahasa indonesia"},
+    "ms": {"malay", "bahasa melayu"},
+    "sw": {"swahili", "kiswahili"},
+    "he": {"hebrew", "עברית"},
+}
+
+SCRIPT_LANGUAGE_PATTERNS = [
+    (re.compile(r"[\u0600-\u06FF]"), "ar"),
+    (re.compile(r"[\u0590-\u05FF]"), "he"),
+    (re.compile(r"[\u0400-\u04FF]"), "ru"),
+    (re.compile(r"[\u0900-\u097F]"), "hi"),
+    (re.compile(r"[\u0980-\u09FF]"), "bn"),
+    (re.compile(r"[\u0B80-\u0BFF]"), "ta"),
+    (re.compile(r"[\u4E00-\u9FFF]"), "zh"),
+    (re.compile(r"[\u3040-\u30FF]"), "ja"),
+    (re.compile(r"[\uAC00-\uD7AF]"), "ko"),
+    (re.compile(r"[\u0E00-\u0E7F]"), "th"),
+    (re.compile(r"[\u10A0-\u10FF]"), "ka"),
+]
+
+NON_LATIN_LANG_CODES = {
+    "ar",
+    "he",
+    "ru",
+    "hi",
+    "bn",
+    "ta",
+    "zh",
+    "ja",
+    "ko",
+    "th",
+    "ka",
+}
+
+ACCENTED_CHAR_PATTERN = re.compile(r"[\u00C0-\u017F]")
 
 
 class AIChatBot:
@@ -466,8 +572,9 @@ Respond in JSON format."""
             updates["email"] = customer_email
         if channel:
             updates["preferred_platform"] = channel.lower()
-        if language:
-            updates["preferred_language"] = language.lower()
+        normalized_language = self._normalize_language_code(language)
+        if normalized_language:
+            updates["preferred_language"] = normalized_language
 
         try:
             profile = await self.enhanced_service.update_customer_profile(
@@ -480,6 +587,82 @@ Respond in JSON format."""
             logger.warning("Failed to update customer profile", error=str(exc), customer_id=customer_id)
             return await self._get_customer_profile(customer_id)
 
+    def _normalize_language_code(self, code: Optional[str]) -> Optional[str]:
+        if not code:
+            return None
+
+        normalized = code.strip().lower()
+        normalized = LANGUAGE_CODE_ALIASES.get(normalized, normalized)
+
+        if normalized in LANGUAGE_NAMES:
+            return normalized
+
+        base = normalized.split("-", 1)[0]
+        return base if base in LANGUAGE_NAMES else normalized or None
+
+    def _get_language_display_name(self, code: Optional[str]) -> str:
+        normalized = self._normalize_language_code(code) or "en"
+        if normalized in LANGUAGE_NAMES:
+            return LANGUAGE_NAMES[normalized]
+        base = normalized.split("-", 1)[0]
+        return LANGUAGE_NAMES.get(base, "English")
+
+    def _extract_language_request(self, message: str) -> Optional[str]:
+        if not message:
+            return None
+
+        lowered = message.lower()
+        directive_detected = any(keyword in lowered for keyword in LANGUAGE_DIRECTIVE_KEYWORDS)
+
+        for lang_code, keywords in LANGUAGE_REQUEST_KEYWORDS.items():
+            for keyword in keywords:
+                if keyword in lowered:
+                    if directive_detected:
+                        return lang_code
+
+                    pattern = rf"(?:^|\b)(?:in|en|de|per|para|pour|nel|na|على|بال|باللغة)?\s*{re.escape(keyword)}\b"
+                    if re.search(pattern, lowered):
+                        return lang_code
+
+                    stripped = lowered.strip()
+                    if stripped.startswith(keyword) or stripped.endswith(keyword):
+                        return lang_code
+
+                    if re.search(rf"{re.escape(keyword)}\s+please", lowered) or re.search(rf"please\s+{re.escape(keyword)}", lowered):
+                        return lang_code
+
+        return None
+
+    def _guess_language_from_script(self, message: str) -> Optional[str]:
+        for pattern, lang_code in SCRIPT_LANGUAGE_PATTERNS:
+            if pattern.search(message):
+                return lang_code
+        return None
+
+    def _infer_language_from_text(self, message: str) -> Optional[str]:
+        if not message:
+            return None
+
+        try:
+            language_candidates = detect_langs(message)
+            if language_candidates:
+                top_candidate = language_candidates[0]
+                if top_candidate.prob >= 0.6:
+                    return self._normalize_language_code(top_candidate.lang)
+        except LangDetectException:
+            pass
+        except Exception:
+            logger.debug("detect_langs failed", text_preview=message[:30])
+
+        try:
+            detected = detect(message)
+            if detected:
+                return self._normalize_language_code(detected)
+        except LangDetectException:
+            return None
+
+        return None
+
     async def _detect_language(
         self,
         message: str,
@@ -488,17 +671,26 @@ Respond in JSON format."""
     ) -> Tuple[Optional[str], str]:
         normalized_message = (message or "").strip()
 
-        if normalized_message:
-            try:
-                detected = detect(normalized_message)
-                if detected:
-                    return detected.lower(), "message"
-            except LangDetectException:
-                pass
-
         profile = await self._get_customer_profile(customer_id)
-        if profile and profile.preferred_language:
-            return profile.preferred_language.lower(), "profile"
+        stored_language: Optional[str] = None
+        if profile and profile.preferred_language and profile.interaction_count:
+            stored_language = self._normalize_language_code(profile.preferred_language)
+
+        explicit_request = self._extract_language_request(normalized_message)
+        if explicit_request:
+            return explicit_request, "customer_request"
+
+        if stored_language:
+            return stored_language, "profile"
+
+        if normalized_message:
+            inferred_language = self._infer_language_from_text(normalized_message)
+            if inferred_language:
+                return inferred_language, "message"
+
+            script_language = self._guess_language_from_script(normalized_message)
+            if script_language:
+                return script_language, "script"
 
         channel_defaults = {
             "whatsapp": "es",
@@ -506,11 +698,15 @@ Respond in JSON format."""
             "instagram": "en",
             "facebook": "en",
             "tiktok": "en",
+            "web": "en",
         }
         if channel and channel.lower() in channel_defaults:
-            return channel_defaults[channel.lower()], "channel_default"
+            default_lang = self._normalize_language_code(channel_defaults[channel.lower()])
+            if default_lang:
+                return default_lang, "channel_default"
 
-        return "en", "fallback"
+        fallback = self._normalize_language_code("en")
+        return fallback, "fallback"
 
     async def _store_conversation_event(
         self,
@@ -563,14 +759,14 @@ Respond in JSON format."""
             **context,
             "intent": intent,
             "current_message": message,
-            "language": language,
+            "language": self._normalize_language_code(language) or "en",
             "channel": channel,
             "customer_name": customer_name,
-            "language_name": LANGUAGE_NAMES.get((language or "en").lower(), "English"),
+            "language_name": self._get_language_display_name(language),
         }
 
         enhanced_context["persona"] = "ai_saler"
-        enhanced_context["persona_detail"] = self._get_persona_prompt(channel, language)
+        enhanced_context["persona_detail"] = self._get_persona_prompt(channel, enhanced_context["language"])
 
         response = await self.gemini_client.generate_response(
             prompt=message,
@@ -628,7 +824,7 @@ Respond in JSON format."""
         return sanitized, commands_removed
 
     def _get_localized_message(self, language: Optional[str], key: str) -> str:
-        lang_code = (language or "en").lower()
+        lang_code = self._normalize_language_code(language) or "en"
         messages = LOCALIZED_MESSAGES.get(lang_code) or LOCALIZED_MESSAGES.get(
             lang_code.split("-", 1)[0]
         )
@@ -638,8 +834,7 @@ Respond in JSON format."""
         return messages.get(key) or LOCALIZED_MESSAGES["en"].get(key, "")
 
     def _get_persona_prompt(self, channel: str, language: Optional[str]) -> str:
-        lang_code = (language or "en").lower()
-        language_name = LANGUAGE_NAMES.get(lang_code, LANGUAGE_NAMES.get(lang_code.split("-", 1)[0], "English"))
+        language_name = self._get_language_display_name(language)
 
         base_prompt = (
             "You are a professional human sales consultant representing the merchant's brand. "
