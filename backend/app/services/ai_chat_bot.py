@@ -18,6 +18,7 @@ from app.db.models import (
     MessageDirection,
     OrderStatus,
     CustomerProfile,
+    BotInstruction,
 )
 from app.services.enhanced_ai_service import EnhancedAIService
 from app.services.service_factory import get_gemini_with_tracking
@@ -94,6 +95,7 @@ class AIChatBot:
         self.project_id = project_id
         self.user_id = user_id
         self.gemini_client = get_gemini_with_tracking(db)
+        self.enhanced_service = EnhancedAIService(db, project_id)
     
     async def process_incoming_message(
         self,
@@ -172,6 +174,18 @@ class AIChatBot:
                 intent=intent
             )
 
+            await self._store_conversation_event(
+                customer_id=customer_id,
+                customer_name=profile.name if profile else None,
+                channel=channel,
+                message=customer_message,
+                direction=MessageDirection.INBOUND,
+                intent=intent.get("primary_intent"),
+                sentiment=intent.get("sentiment"),
+                entities=intent.get("entities"),
+                language=detected_language,
+            )
+
             ai_response = await self._generate_response(
                 message=customer_message,
                 intent=intent,
@@ -232,6 +246,18 @@ class AIChatBot:
             )
             self.db.add(outbound_msg)
             await self.db.commit()
+
+            await self._store_conversation_event(
+                customer_id=customer_id,
+                customer_name=profile.name if profile else None,
+                channel=channel,
+                message=response_content,
+                direction=MessageDirection.OUTBOUND,
+                intent=intent.get("primary_intent"),
+                sentiment=intent.get("sentiment"),
+                entities={"actions_taken": actions_taken} if actions_taken else None,
+                language=detected_language,
+            )
             
             logger.info(
                 "AI response generated",
@@ -388,7 +414,139 @@ Respond in JSON format."""
             "name": profile.name if profile else None,
         }
 
+        # Project-specific instructions (AI Saler persona relies on these)
+        instructions_result = await self.db.execute(
+            select(BotInstruction)
+            .where(BotInstruction.project_id == self.project_id)
+            .where(BotInstruction.is_active == True)
+            .order_by(BotInstruction.priority.desc())
+        )
+        instructions = instructions_result.scalars().all()
+
+        if instructions:
+            context["custom_instructions"] = [
+                {
+                    "title": inst.title,
+                    "instruction": inst.instruction,
+                    "category": inst.category,
+                    "priority": inst.priority,
+                    "platforms": inst.active_for_platforms,
+                }
+                for inst in instructions
+            ]
+
         return context
+
+    async def _get_customer_profile(self, customer_id: str) -> Optional[CustomerProfile]:
+        if not customer_id:
+            return None
+        try:
+            profile = await self.enhanced_service.get_customer_profile(customer_id)
+            return profile
+        except Exception as exc:
+            logger.warning("Failed to load customer profile", error=str(exc), customer_id=customer_id)
+            return None
+
+    async def _update_customer_profile(
+        self,
+        customer_id: str,
+        channel: Optional[str],
+        language: Optional[str],
+        customer_phone: Optional[str],
+        customer_email: Optional[str],
+    ) -> Optional[CustomerProfile]:
+        if not customer_id:
+            return None
+
+        updates: Dict[str, Any] = {}
+
+        if customer_phone:
+            updates["phone"] = customer_phone
+        if customer_email:
+            updates["email"] = customer_email
+        if channel:
+            updates["preferred_platform"] = channel.lower()
+        if language:
+            updates["preferred_language"] = language.lower()
+
+        try:
+            profile = await self.enhanced_service.update_customer_profile(
+                customer_id=customer_id,
+                platform=(channel or "unknown"),
+                **updates,
+            )
+            return profile
+        except Exception as exc:
+            logger.warning("Failed to update customer profile", error=str(exc), customer_id=customer_id)
+            return await self._get_customer_profile(customer_id)
+
+    async def _detect_language(
+        self,
+        message: str,
+        customer_id: str,
+        channel: Optional[str],
+    ) -> Tuple[Optional[str], str]:
+        normalized_message = (message or "").strip()
+
+        if normalized_message:
+            try:
+                detected = detect(normalized_message)
+                if detected:
+                    return detected.lower(), "message"
+            except LangDetectException:
+                pass
+
+        profile = await self._get_customer_profile(customer_id)
+        if profile and profile.preferred_language:
+            return profile.preferred_language.lower(), "profile"
+
+        channel_defaults = {
+            "whatsapp": "es",
+            "telegram": "en",
+            "instagram": "en",
+            "facebook": "en",
+            "tiktok": "en",
+        }
+        if channel and channel.lower() in channel_defaults:
+            return channel_defaults[channel.lower()], "channel_default"
+
+        return "en", "fallback"
+
+    async def _store_conversation_event(
+        self,
+        *,
+        customer_id: str,
+        customer_name: Optional[str],
+        channel: str,
+        message: str,
+        direction: MessageDirection,
+        intent: Optional[str],
+        sentiment: Optional[str],
+        entities: Optional[Dict[str, Any]],
+        language: Optional[str],
+    ) -> None:
+        try:
+            merged_entities = dict(entities or {})
+            if language:
+                merged_entities.setdefault("_language", language)
+
+            await self.enhanced_service.save_conversation(
+                customer_id=customer_id,
+                customer_name=customer_name,
+                platform=channel,
+                message_content=message,
+                direction=direction,
+                intent=intent,
+                sentiment=sentiment,
+                entities=merged_entities,
+            )
+        except Exception as exc:
+            logger.warning(
+                "Failed to persist conversation event",
+                error=str(exc),
+                customer_id=customer_id,
+                channel=channel,
+            )
 
     async def _generate_response(
         self,
@@ -401,8 +559,6 @@ Respond in JSON format."""
     ) -> Dict[str, Any]:
         """Generate AI response based on message, intent, and context."""
         
-        persona_prompt = self._get_persona_prompt(channel, language)
-
         enhanced_context = {
             **context,
             "intent": intent,
@@ -413,20 +569,11 @@ Respond in JSON format."""
             "language_name": LANGUAGE_NAMES.get((language or "en").lower(), "English"),
         }
 
-        full_prompt = f"""{persona_prompt}
-
-Current situation:
-- Customer intent: {intent.get('primary_intent')}
-- Urgency: {intent.get('urgency')}
-- Sentiment: {intent.get('sentiment')}
-- Customer language: {language or 'unknown'}
-
-Customer message: "{message}"
-
-Craft a concise response in the customer's language. If language is unknown, infer from message. Mention relevant products or offers when helpful."""
+        enhanced_context["persona"] = "ai_saler"
+        enhanced_context["persona_detail"] = self._get_persona_prompt(channel, language)
 
         response = await self.gemini_client.generate_response(
-            prompt=full_prompt,
+            prompt=message,
             context=enhanced_context,
             use_functions=True,
             temperature=0.7,
@@ -434,7 +581,7 @@ Craft a concise response in the customer's language. If language is unknown, inf
         )
 
         metadata = response.setdefault("metadata", {})
-        metadata["persona"] = persona_prompt.split("\n", 1)[0]
+        metadata["persona"] = "ai_saler"
         if language:
             metadata.setdefault("language", language)
 

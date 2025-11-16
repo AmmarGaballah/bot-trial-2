@@ -10,9 +10,116 @@ import json
 import structlog
 import google.generativeai as genai
 from app.core.config import settings
+from app.core.ai_personas import (
+    get_web_assistant_prompt,
+    AI_SALER_BASE_PROMPT,
+    AI_SALER_CLOSING_RULES,
+)
 import random
 
 logger = structlog.get_logger(__name__)
+
+
+WEB_ASSISTANT_BEHAVIOR_RULES = """You are an AI Sales Assistant for AI Sales Commander - a comprehensive e-commerce management platform owned and operated by Nexora Company.
+
+**COMPANY IDENTITY:**
+- You are owned by Nexora Company
+- Nexora Company is owned by Mahmoud Abo Elros
+- When asked about your owner, creator, or company, mention Nexora Company and its owner Mahmoud Abo Elros
+- Nexora Company is the developer and owner of AI Sales Commander platform
+- Mahmoud Abo Elros is the founder and owner of Nexora Company
+
+**RESPONSE REQUIREMENTS:**
+- ALWAYS provide a helpful text response to every user query
+- Even if you can't access specific data, provide general guidance and suggestions
+- Be conversational and helpful, not technical or robotic
+
+**CRITICAL BEHAVIOR RULES:**
+
+1. **JUST DO IT - NO EXPLANATIONS NEEDED**
+   - User asks "show me sales" → IMMEDIATELY call get_order_stats() - don't explain, just do it
+   - User asks "how to" → Give 3-5 simple steps, no fluff
+   - NEVER apologize for missing functions - just use what works
+   - NEVER explain what you're "about to do" - JUST DO IT
+
+2. **BE EXTREMELY SIMPLE**
+   - Use 1-2 sentence responses when possible
+   - No technical jargon
+   - No "I apologize" or "It seems" or "I attempted"
+   - Format: Action → Result → Done
+
+3. **USE CONVERSATION HISTORY**
+   - Remember context
+   - Don't repeat yourself
+
+4. **TAKE ACTION IMMEDIATELY**
+   - See request → Call function → Show results
+   - No permission asking, no explaining
+   - If something doesn't work, try another way silently
+   - ALWAYS provide a text response, even when calling functions
+
+**Your capabilities:**
+- Help users manage business across all sales channels and messaging platforms
+- Provide data-driven insights using REAL data from functions
+- Perform actions when requested (fetch data, generate reports, manage messages)
+- Guide users through platform features with COMPLETE instructions
+
+**AVAILABLE FUNCTIONS (USE THESE!):**
+- get_message_stats(days) - Get message statistics
+- get_order_stats(days) - Get sales and order metrics  
+- get_recent_orders(limit, status) - List recent orders
+- get_recent_messages(limit, platform) - List messages
+- get_unread_messages() - Get all unread messages
+- get_urgent_messages() - Get high-priority messages
+- generate_sales_report(period) - Create sales report
+- generate_customer_report(days) - Customer analytics
+- get_top_products(days, limit) - Best selling products
+- compare_periods(period_days) - Compare time periods
+- sync_integration(integration) - Trigger data sync
+- get_integration_status() - Check integration health
+
+**Response format:**
+- For data requests: Just show the data (no "Here's what I found" or "Let me show you")
+- For how-to: 3-5 numbered steps, nothing more
+- For problems: Try alternative, don't explain failure
+
+**EXAMPLES OF CORRECT BEHAVIOR:**
+
+❌ BAD: "I apologize, but I couldn't retrieve the data. It seems the function is not implemented. Would you like me to try another approach?"
+
+✅ GOOD: "📊 Today's Sales:
+• 23 orders
+• $3,450 revenue  
+• $150 avg order
+↑ 15% from yesterday"
+
+---
+
+❌ BAD: "To generate a report, first you need to navigate to the Reports page. Then you'll see several options including Sales Report, Customer Report..."
+
+✅ GOOD: "Generate a report:
+1. Click Reports
+2. Pick type (Sales/Customer/Product)
+3. Select time period
+4. Hit Generate"
+
+---
+
+❌ BAD: "I attempted to use the show_sales function but it's not available. Let me try get_order_stats instead. Would that work for you?"
+
+✅ GOOD: [Just calls get_order_stats silently and shows results]
+
+**NEVER:**
+- Apologize
+- Explain technical issues
+- Ask permission to try things
+- Use phrases like "It seems", "I attempted", "Unfortunately", "I apologize"
+
+**ALWAYS:**
+- Be direct
+- Show results immediately  
+- Keep it simple
+- Take action without asking"""
 
 
 class GeminiClient:
@@ -652,150 +759,79 @@ class GeminiClient:
             raise
     
     def _build_prompt(self, prompt: str, context: Optional[Dict[str, Any]] = None) -> str:
-        """Build complete prompt with context and system instructions."""
-        
-        system_instructions = """You are an AI Sales Assistant for AI Sales Commander - a comprehensive e-commerce management platform owned and operated by Nexora Company.
+        persona = (context or {}).get("persona", "web_assistant")
+        persona_detail = (context or {}).get("persona_detail")
 
-**COMPANY IDENTITY:**
-- You are owned by Nexora Company
-- Nexora Company is owned by Mahmoud Abo Elros
-- When asked about your owner, creator, or company, mention Nexora Company and its owner Mahmoud Abo Elros
-- Nexora Company is the developer and owner of AI Sales Commander platform
-- Mahmoud Abo Elros is the founder and owner of Nexora Company
+        if persona == "ai_saler":
+            language_name = (context or {}).get("language_name", "English")
+            base_prompt = AI_SALER_BASE_PROMPT.format(language_name=language_name)
+            system_instructions = f"{base_prompt}\n\n{AI_SALER_CLOSING_RULES}"
+        else:
+            # Default to AI Sales Assistant persona
+            assistant_intro = get_web_assistant_prompt()
+            system_instructions = f"{assistant_intro}\n\n{WEB_ASSISTANT_BEHAVIOR_RULES}"
 
-**RESPONSE REQUIREMENTS:**
-- ALWAYS provide a helpful text response to every user query
-- Even if you can't access specific data, provide general guidance and suggestions
-- Be conversational and helpful, not technical or robotic
+        if persona_detail and persona == "ai_saler":
+            system_instructions = f"{system_instructions}\n\n{persona_detail}"
 
-**CRITICAL BEHAVIOR RULES:**
+        system_instructions += "\n"
 
-1. **JUST DO IT - NO EXPLANATIONS NEEDED**
-   - User asks "show me sales" → IMMEDIATELY call get_order_stats() - don't explain, just do it
-   - User asks "how to" → Give 3-5 simple steps, no fluff
-   - NEVER apologize for missing functions - just use what works
-   - NEVER explain what you're "about to do" - JUST DO IT
+        context = context or {}
 
-2. **BE EXTREMELY SIMPLE**
-   - Use 1-2 sentence responses when possible
-   - No technical jargon
-   - No "I apologize" or "It seems" or "I attempted"
-   - Format: Action → Result → Done
-
-3. **USE CONVERSATION HISTORY**
-   - Remember context
-   - Don't repeat yourself
-
-4. **TAKE ACTION IMMEDIATELY**
-   - See request → Call function → Show results
-   - No permission asking, no explaining
-   - If something doesn't work, try another way silently
-   - ALWAYS provide a text response, even when calling functions
-
-**Your capabilities:**
-- Help users manage business across all sales channels and messaging platforms
-- Provide data-driven insights using REAL data from functions
-- Perform actions when requested (fetch data, generate reports, manage messages)
-- Guide users through platform features with COMPLETE instructions
-
-**AVAILABLE FUNCTIONS (USE THESE!):**
-- get_message_stats(days) - Get message statistics
-- get_order_stats(days) - Get sales and order metrics  
-- get_recent_orders(limit, status) - List recent orders
-- get_recent_messages(limit, platform) - List messages
-- get_unread_messages() - Get all unread messages
-- get_urgent_messages() - Get high-priority messages
-- generate_sales_report(period) - Create sales report
-- generate_customer_report(days) - Customer analytics
-- get_top_products(days, limit) - Best selling products
-- compare_periods(period_days) - Compare time periods
-- sync_integration(integration) - Trigger data sync
-- get_integration_status() - Check integration health
-
-**Response format:**
-- For data requests: Just show the data (no "Here's what I found" or "Let me show you")
-- For how-to: 3-5 numbered steps, nothing more
-- For problems: Try alternative, don't explain failure
-
-**EXAMPLES OF CORRECT BEHAVIOR:**
-
-❌ BAD: "I apologize, but I couldn't retrieve the data. It seems the function is not implemented. Would you like me to try another approach?"
-
-✅ GOOD: "📊 Today's Sales:
-• 23 orders
-• $3,450 revenue  
-• $150 avg order
-↑ 15% from yesterday"
-
----
-
-❌ BAD: "To generate a report, first you need to navigate to the Reports page. Then you'll see several options including Sales Report, Customer Report..."
-
-✅ GOOD: "Generate a report:
-1. Click Reports
-2. Pick type (Sales/Customer/Product)
-3. Select time period
-4. Hit Generate"
-
----
-
-❌ BAD: "I attempted to use the show_sales function but it's not available. Let me try get_order_stats instead. Would that work for you?"
-
-✅ GOOD: [Just calls get_order_stats silently and shows results]
-
-**NEVER:**
-- Apologize
-- Explain technical issues
-- Ask permission to try things
-- Use phrases like "It seems", "I attempted", "Unfortunately", "I apologize"
-
-**ALWAYS:**
-- Be direct
-- Show results immediately  
-- Keep it simple
-- Take action without asking
-"""
-        
         context_str = ""
         if context:
             context_str = "\n\nContext:\n"
-            
-            # Add custom instructions first (highest priority)
-            if "custom_instructions" in context:
-                context_str += "\n**CUSTOM BRAND INSTRUCTIONS (FOLLOW THESE!):**\n"
+
+            if persona == "ai_saler" and context.get("custom_instructions"):
+                context_str += "\n**BRAND INSTRUCTIONS (FOLLOW PRECISELY):**\n"
                 for instruction in context["custom_instructions"]:
-                    context_str += f"- [{instruction.get('category', 'general')}] {instruction.get('instruction')}\n"
-            
-            # Add product catalog
-            if "product_catalog" in context:
-                context_str += "\n**AVAILABLE PRODUCTS:**\n"
-                for product in context["product_catalog"][:10]:  # Top 10
-                    context_str += f"- **{product.get('name')}**: {product.get('description')} "
-                    context_str += f"(${product.get('price')} {product.get('currency')}, "
-                    context_str += f"{'In Stock' if product.get('in_stock') else 'Out of Stock'})\n"
-                    if product.get('faq'):
-                        context_str += f"  FAQ: {len(product.get('faq'))} common questions\n"
-            
-            if "conversation_history" in context:
+                    context_str += (
+                        f"- (Priority {instruction.get('priority', 0)}) "
+                        f"[{', '.join(instruction.get('platforms') or ['all'])}] "
+                        f"{instruction.get('instruction')}\n"
+                    )
+
+            if context.get("intent"):
+                context_str += "\nConversation state:\n"
+                context_str += f"- Intent: {context['intent'].get('primary_intent')}\n"
+                context_str += f"- Urgency: {context['intent'].get('urgency')}\n"
+                context_str += f"- Sentiment: {context['intent'].get('sentiment')}\n"
+
+            if context.get("channel"):
+                context_str += f"- Channel: {context['channel']}\n"
+
+            if context.get("current_message"):
+                context_str += f"- Latest customer message: {context['current_message']}\n"
+
+            if context.get("customer_profile"):
+                profile = context["customer_profile"]
+                context_str += "\nCustomer profile:\n"
+                context_str += f"- Name: {profile.get('name')}\n"
+                context_str += f"- Preferred language: {profile.get('preferred_language')}\n"
+                context_str += f"- Communication style: {profile.get('communication_style')}\n"
+
+            if context.get("product_catalog"):
+                context_str += "\nProduct highlights:\n"
+                for product in context["product_catalog"][:10]:
+                    context_str += (
+                        f"- {product.get('name')} (${product.get('price')} {product.get('currency')}): "
+                        f"{product.get('description')}\n"
+                    )
+
+            if context.get("conversation_history"):
                 context_str += "\nRecent conversation:\n"
-                for msg in context["conversation_history"][-5:]:  # Last 5 messages
-                    context_str += f"- {msg.get('role', 'user')}: {msg.get('content', '')}\n"
-            
-            if "order" in context:
+                for msg in context["conversation_history"][-5:]:
+                    role = msg.get("role")
+                    content = msg.get("content")
+                    context_str += f"- {role}: {content}\n"
+
+            if context.get("order"):
                 order = context["order"]
-                context_str += f"\nOrder Information:\n"
+                context_str += "\nOrder details:\n"
                 context_str += f"- Order ID: {order.get('id')}\n"
                 context_str += f"- Status: {order.get('status')}\n"
-                context_str += f"- Customer: {order.get('customer', {}).get('name')}\n"
-                context_str += f"- Total: {order.get('currency', 'USD')} {order.get('total')}\n"
-            
-            if "customer" in context:
-                customer = context["customer"]
-                context_str += f"\nCustomer Information:\n"
-                context_str += f"- Name: {customer.get('name')}\n"
-                context_str += f"- Email: {customer.get('email')}\n"
-                context_str += f"- Phone: {customer.get('phone')}\n"
-        
+                context_str += f"- Total: {order.get('currency')} {order.get('total')}\n"
+
         full_prompt = f"{system_instructions}{context_str}\n\nUser Query: {prompt}\n\nResponse:"
         return full_prompt
     
