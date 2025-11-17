@@ -7,12 +7,14 @@ from fastapi import APIRouter, Request, HTTPException, status, BackgroundTasks
 from uuid import UUID
 import structlog
 
-from app.db.models import Message, CustomerProfile, Integration
+from app.db.models import Message, CustomerProfile, Integration, IntegrationStatus
 from app.core.database import get_db, AsyncSessionLocal
 from app.workers.tasks import process_incoming_message
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from fastapi import Depends
+from app.services.ai_chat_bot import get_chat_bot
+from app.services.integrations.facebook import FacebookClient
 
 router = APIRouter()
 logger = structlog.get_logger(__name__)
@@ -227,18 +229,49 @@ async def facebook_webhook(
     """
     try:
         payload = await request.json()
-        
+
+        # Prepare AI chat bot (no user context for webhooks)
+        chat_bot = get_chat_bot(db, project_id, None)
+
+        # Load Facebook integration config for sending replies
+        integration_result = await db.execute(
+            select(Integration)
+            .where(Integration.project_id == project_id)
+            .where(Integration.provider == "facebook")
+            .where(Integration.status == IntegrationStatus.CONNECTED)
+        )
+        integration = integration_result.scalar_one_or_none()
+
+        facebook_client: FacebookClient | None = None
+        if integration:
+            try:
+                facebook_client = FacebookClient(integration.config or {})
+            except Exception as client_error:
+                logger.error(
+                    "Failed to initialize Facebook client",
+                    project_id=str(project_id),
+                    error=str(client_error)
+                )
+
+        processed_count = 0
+
         # Extract message details from Facebook webhook format
         for entry in payload.get("entry", []):
             for messaging_event in entry.get("messaging", []):
                 sender_id = messaging_event.get("sender", {}).get("id")
-                
+
+                if not sender_id:
+                    continue
+
                 # Handle message
                 if "message" in messaging_event:
                     message = messaging_event["message"]
                     message_text = message.get("text", "")
                     message_id = message.get("mid")
-                    
+
+                    if not message_text:
+                        continue
+
                     # Save message
                     new_message = Message(
                         project_id=project_id,
@@ -255,19 +288,38 @@ async def facebook_webhook(
                     )
                     db.add(new_message)
                     await db.commit()
-                    await db.refresh(new_message)
-                    
-                    # Process message asynchronously
+
+                    # Process message with AI
                     try:
-                        import asyncio
-                        asyncio.create_task(_process_incoming_message_with_ai(str(new_message.id), str(project_id), "facebook"))
-                    except Exception as e:
-                        logger.error("Failed to queue Facebook message", error=str(e))
-        
-        logger.info("Facebook message received", project_id=str(project_id))
-        
-        return {"status": "received"}
-        
+                        ai_result = await chat_bot.process_incoming_message(
+                            customer_message=message_text,
+                            customer_id=sender_id,
+                            channel="facebook"
+                        )
+
+                        response_text = (ai_result or {}).get("response")
+
+                        if response_text and facebook_client:
+                            await facebook_client.send_message(sender_id, response_text)
+
+                        processed_count += 1
+
+                    except Exception as process_error:
+                        logger.error(
+                            "Failed to process Facebook message",
+                            project_id=str(project_id),
+                            sender_id=sender_id,
+                            error=str(process_error)
+                        )
+
+        logger.info(
+            "Facebook messages processed",
+            project_id=str(project_id),
+            count=processed_count
+        )
+
+        return {"status": "processed", "count": processed_count}
+
     except Exception as e:
         logger.error("Facebook webhook error", error=str(e))
         raise HTTPException(

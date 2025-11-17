@@ -25,6 +25,13 @@ from app.services.service_factory import get_gemini_with_tracking
 
 logger = structlog.get_logger(__name__)
 
+SUPPORTED_LANGUAGES = {
+    "en": "English",
+    "es": "Spanish",
+    "fr": "French",
+    "ar": "Arabic",
+}
+
 
 LANGUAGE_NAMES = {
     "en": "English",
@@ -32,37 +39,13 @@ LANGUAGE_NAMES = {
     "en-gb": "English",
     "es": "Spanish",
     "es-419": "Spanish",
+    "es-es": "Spanish",
     "fr": "French",
-    "de": "German",
-    "it": "Italian",
-    "pt": "Portuguese",
-    "pt-br": "Portuguese",
+    "fr-fr": "French",
+    "fr-ca": "French",
     "ar": "Arabic",
-    "zh": "Chinese",
-    "zh-cn": "Chinese",
-    "zh-tw": "Chinese",
-    "ja": "Japanese",
-    "ko": "Korean",
-    "ru": "Russian",
-    "hi": "Hindi",
-    "tr": "Turkish",
-    "nl": "Dutch",
-    "sv": "Swedish",
-    "pl": "Polish",
-    "uk": "Ukrainian",
-    "cs": "Czech",
-    "el": "Greek",
-    "fa": "Persian",
-    "ur": "Urdu",
-    "he": "Hebrew",
-    "bn": "Bengali",
-    "ta": "Tamil",
-    "vi": "Vietnamese",
-    "th": "Thai",
-    "id": "Indonesian",
-    "ms": "Malay",
-    "sw": "Swahili",
-    "ka": "Georgian",
+    "ar-eg": "Arabic",
+    "ar-sa": "Arabic",
 }
 
 LOCALIZED_MESSAGES = {
@@ -80,11 +63,6 @@ LOCALIZED_MESSAGES = {
         "generic_fallback": "Je rassemble encore les informations nécessaires pour finaliser votre demande. Merci de partager tout renseignement complémentaire et je vous répondrai rapidement.",
         "technical_issue": "J’ai rencontré un incident technique en traitant votre demande et je l’ai signalé pour suivi. Je vous tiendrai informé.",
         "command_removed": "Je n’ai pas pu effectuer cette action automatiquement. Donnez-moi les détails dont vous avez besoin et je m’en occupe directement.",
-    },
-    "de": {
-        "generic_fallback": "Ich sammle noch die nötigen Details, um Ihre Anfrage abzuschließen. Bitte teilen Sie mir weitere Informationen mit, dann melde ich mich umgehend.",
-        "technical_issue": "Beim Bearbeiten Ihrer Anfrage ist ein technisches Problem aufgetreten. Ich habe es zur Nachverfolgung notiert und halte Sie auf dem Laufenden.",
-        "command_removed": "Ich konnte diese Aktion nicht automatisch ausführen. Teilen Sie mir bitte die Details mit, dann kümmere ich mich persönlich darum.",
     },
     "ar": {
         "generic_fallback": "ما زلت أجمع التفاصيل اللازمة لإكمال طلبك. شاركني أي معلومات إضافية لديك وسأعود إليك فورًا.",
@@ -127,61 +105,14 @@ LANGUAGE_REQUEST_KEYWORDS = {
     "en": {"english", "inglés", "ingles", "anglais"},
     "es": {"spanish", "español", "espanol", "castellano"},
     "fr": {"french", "français", "francais"},
-    "de": {"german", "deutsch"},
-    "it": {"italian", "italiano"},
-    "pt": {"portuguese", "português", "portugues"},
-    "pt-br": {"brazilian portuguese", "português do brasil", "portugues brasil"},
     "ar": {"arabic", "arab", "عربي", "العربية", "بالعربي"},
-    "ru": {"russian", "русский", "russkiy"},
-    "zh": {"chinese", "mandarin", "中文", "汉语", "漢語"},
-    "ja": {"japanese", "日本語", "にほんご"},
-    "ko": {"korean", "한국어", "한글"},
-    "hi": {"hindi", "हिन्दी", "हिंदी"},
-    "tr": {"turkish", "türkçe", "turkce"},
-    "nl": {"dutch", "nederlands"},
-    "sv": {"swedish", "svenska"},
-    "pl": {"polish", "polski"},
-    "uk": {"ukrainian", "українська"},
-    "cs": {"czech", "čeština", "cesky"},
-    "fa": {"persian", "farsi", "فارسی"},
-    "ur": {"urdu", "اردو"},
-    "bn": {"bengali", "বাংলা"},
-    "ta": {"tamil", "தமிழ்"},
-    "vi": {"vietnamese", "tiếng việt"},
-    "th": {"thai", "ภาษาไทย"},
-    "id": {"indonesian", "bahasa indonesia"},
-    "ms": {"malay", "bahasa melayu"},
-    "sw": {"swahili", "kiswahili"},
-    "he": {"hebrew", "עברית"},
 }
 
 SCRIPT_LANGUAGE_PATTERNS = [
     (re.compile(r"[\u0600-\u06FF]"), "ar"),
-    (re.compile(r"[\u0590-\u05FF]"), "he"),
-    (re.compile(r"[\u0400-\u04FF]"), "ru"),
-    (re.compile(r"[\u0900-\u097F]"), "hi"),
-    (re.compile(r"[\u0980-\u09FF]"), "bn"),
-    (re.compile(r"[\u0B80-\u0BFF]"), "ta"),
-    (re.compile(r"[\u4E00-\u9FFF]"), "zh"),
-    (re.compile(r"[\u3040-\u30FF]"), "ja"),
-    (re.compile(r"[\uAC00-\uD7AF]"), "ko"),
-    (re.compile(r"[\u0E00-\u0E7F]"), "th"),
-    (re.compile(r"[\u10A0-\u10FF]"), "ka"),
 ]
 
-NON_LATIN_LANG_CODES = {
-    "ar",
-    "he",
-    "ru",
-    "hi",
-    "bn",
-    "ta",
-    "zh",
-    "ja",
-    "ko",
-    "th",
-    "ka",
-}
+NON_LATIN_LANG_CODES = {"ar"}
 
 ACCENTED_CHAR_PATTERN = re.compile(r"[\u00C0-\u017F]")
 
@@ -242,11 +173,12 @@ class AIChatBot:
                 customer_id,
                 channel
             )
+            normalized_language = self._ensure_supported_language(detected_language)
 
             profile = await self._update_customer_profile(
                 customer_id=customer_id,
                 channel=channel,
-                language=detected_language,
+                language=normalized_language,
                 customer_phone=customer_phone,
                 customer_email=customer_email
             )
@@ -260,7 +192,7 @@ class AIChatBot:
                 channel=channel,
                 provider=channel,
                 sender={
-                    "preferred_language": detected_language,
+                    "preferred_language": normalized_language,
                     "language_source": language_source,
                     "profile_id": str(profile.id) if profile else None,
                 },
@@ -289,7 +221,7 @@ class AIChatBot:
                 intent=intent.get("primary_intent"),
                 sentiment=intent.get("sentiment"),
                 entities=intent.get("entities"),
-                language=detected_language,
+                language=normalized_language,
             )
 
             ai_response = await self._generate_response(
@@ -297,7 +229,7 @@ class AIChatBot:
                 intent=intent,
                 context=context,
                 channel=channel,
-                language=detected_language,
+                language=normalized_language,
                 customer_name=profile.name if profile else None
             )
             
@@ -343,7 +275,7 @@ class AIChatBot:
                     "cost": ai_response.get("cost"),
                     "intent": intent,
                     "actions_taken": actions_taken,
-                    "language": detected_language,
+                    "language": normalized_language,
                     "language_source": language_source,
                     "persona": ai_response.get("metadata", {}).get("persona"),
                     "commands_removed": commands_removed,
@@ -362,7 +294,7 @@ class AIChatBot:
                 intent=intent.get("primary_intent"),
                 sentiment=intent.get("sentiment"),
                 entities={"actions_taken": actions_taken} if actions_taken else None,
-                language=detected_language,
+                language=normalized_language,
             )
             
             logger.info(
@@ -598,14 +530,20 @@ Respond in JSON format."""
             return normalized
 
         base = normalized.split("-", 1)[0]
-        return base if base in LANGUAGE_NAMES else normalized or None
+        if base in LANGUAGE_NAMES:
+            return base
+
+        return normalized or None
 
     def _get_language_display_name(self, code: Optional[str]) -> str:
-        normalized = self._normalize_language_code(code) or "en"
-        if normalized in LANGUAGE_NAMES:
-            return LANGUAGE_NAMES[normalized]
-        base = normalized.split("-", 1)[0]
-        return LANGUAGE_NAMES.get(base, "English")
+        normalized = self._ensure_supported_language(code)
+        return SUPPORTED_LANGUAGES.get(normalized, SUPPORTED_LANGUAGES["en"])
+
+    def _ensure_supported_language(self, code: Optional[str]) -> str:
+        normalized = self._normalize_language_code(code or "") if code else None
+        if normalized and normalized in SUPPORTED_LANGUAGES:
+            return normalized
+        return "en"
 
     def _extract_language_request(self, message: str) -> Optional[str]:
         if not message:
@@ -678,35 +616,47 @@ Respond in JSON format."""
 
         explicit_request = self._extract_language_request(normalized_message)
         if explicit_request:
-            return explicit_request, "customer_request"
+            lang = self._ensure_supported_language(explicit_request)
+            source = "customer_request" if lang == self._normalize_language_code(explicit_request) else "fallback"
+            return lang, source
 
         if stored_language:
-            return stored_language, "profile"
+            lang = self._ensure_supported_language(stored_language)
+            source = "profile" if lang == stored_language else "fallback"
+            return lang, source
+
+        candidate_lang: Optional[str] = None
+        source = "default"
 
         if normalized_message:
             inferred_language = self._infer_language_from_text(normalized_message)
             if inferred_language:
-                return inferred_language, "message"
+                candidate_lang = inferred_language
+                source = "message"
+            else:
+                script_language = self._guess_language_from_script(normalized_message)
+                if script_language:
+                    candidate_lang = script_language
+                    source = "script"
 
-            script_language = self._guess_language_from_script(normalized_message)
-            if script_language:
-                return script_language, "script"
+        if not candidate_lang and channel:
+            channel_defaults = {
+                "whatsapp": "es",
+                "telegram": "en",
+                "instagram": "en",
+                "facebook": "en",
+                "tiktok": "en",
+                "web": "en",
+            }
+            channel_lang = channel_defaults.get(channel.lower())
+            if channel_lang:
+                candidate_lang = channel_lang
+                source = "channel_default"
 
-        channel_defaults = {
-            "whatsapp": "es",
-            "telegram": "en",
-            "instagram": "en",
-            "facebook": "en",
-            "tiktok": "en",
-            "web": "en",
-        }
-        if channel and channel.lower() in channel_defaults:
-            default_lang = self._normalize_language_code(channel_defaults[channel.lower()])
-            if default_lang:
-                return default_lang, "channel_default"
+        final_lang = self._ensure_supported_language(candidate_lang)
+        final_source = source if candidate_lang and final_lang == self._normalize_language_code(candidate_lang) else "fallback"
 
-        fallback = self._normalize_language_code("en")
-        return fallback, "fallback"
+        return final_lang, final_source
 
     async def _store_conversation_event(
         self,
