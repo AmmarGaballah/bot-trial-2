@@ -7,7 +7,13 @@ from fastapi import APIRouter, Request, HTTPException, status, BackgroundTasks
 from uuid import UUID
 import structlog
 
-from app.db.models import Message, CustomerProfile, Integration, IntegrationStatus
+from app.db.models import (
+    Message,
+    CustomerProfile,
+    Integration,
+    IntegrationStatus,
+    MessageDirection,
+)
 from app.core.database import get_db, AsyncSessionLocal
 from app.workers.tasks import process_incoming_message
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -238,7 +244,6 @@ async def facebook_webhook(
             select(Integration)
             .where(Integration.project_id == project_id)
             .where(Integration.provider == "facebook")
-            .where(Integration.status == IntegrationStatus.CONNECTED)
         )
         integration = integration_result.scalar_one_or_none()
 
@@ -252,6 +257,11 @@ async def facebook_webhook(
                     project_id=str(project_id),
                     error=str(client_error)
                 )
+        else:
+            logger.warning(
+                "Facebook integration not configured",
+                project_id=str(project_id)
+            )
 
         processed_count = 0
 
@@ -272,23 +282,6 @@ async def facebook_webhook(
                     if not message_text:
                         continue
 
-                    # Save message
-                    new_message = Message(
-                        project_id=project_id,
-                        content=message_text,
-                        direction="inbound",
-                        platform="facebook",
-                        provider="facebook",
-                        external_id=message_id,
-                        sender={
-                            "facebook_id": sender_id,
-                            "platform": "facebook"
-                        },
-                        status="received"
-                    )
-                    db.add(new_message)
-                    await db.commit()
-
                     # Process message with AI
                     try:
                         ai_result = await chat_bot.process_incoming_message(
@@ -301,6 +294,13 @@ async def facebook_webhook(
 
                         if response_text and facebook_client:
                             await facebook_client.send_message(sender_id, response_text)
+                        elif response_text and not facebook_client:
+                            logger.warning(
+                                "Facebook response not sent: no client",
+                                project_id=str(project_id),
+                                sender_id=sender_id,
+                                integration_status=(integration.status.value if integration else None)
+                            )
 
                         processed_count += 1
 
